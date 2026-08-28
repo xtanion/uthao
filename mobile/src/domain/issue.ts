@@ -1,3 +1,7 @@
+/** Mirrors the server's max_photos_per_upload; it rejects a fourth anyway,
+ *  but the button should stop before a person has taken one. */
+export const MAX_PHOTOS = 3;
+
 export const CATEGORIES = [
   'pothole_road', 'garbage', 'footpath', 'streetlight', 'water_drainage',
   'manhole', 'traffic_infrastructure', 'fallen_tree', 'public_property', 'other',

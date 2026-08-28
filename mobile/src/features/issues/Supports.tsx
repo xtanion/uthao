@@ -11,7 +11,7 @@ import {
   View,
 } from 'react-native';
 import type { Support } from '../../domain/issue';
-import { shortAge } from '../../domain/issue';
+import { MAX_PHOTOS, shortAge } from '../../domain/issue';
 import { Avatar } from '../profile/Avatar';
 import { type as t, useTone } from '../../theme/tokens';
 
@@ -154,6 +154,7 @@ export function SupportComposer({
   const tone = useTone();
   const [body, setBody] = useState('');
   const ready = !busy && (body.trim().length > 0 || attached.length > 0);
+  const full = attached.length >= MAX_PHOTOS;
 
   const label = isReporter ? 'Post' : supported ? 'Add' : 'Support';
   const placeholder = isReporter
@@ -187,8 +188,12 @@ export function SupportComposer({
       )}
 
       <View style={[styles.composerRow, { borderBottomColor: tone.hairline }]}>
-        <Pressable onPress={onPickPhoto} hitSlop={8} disabled={busy}>
-          <Camera size={22} color={busy ? tone.chalk : tone.ink} />
+        <Pressable
+          onPress={onPickPhoto}
+          hitSlop={8}
+          disabled={busy || full}
+          accessibilityLabel={full ? `${MAX_PHOTOS} photos already attached` : 'Take a photo'}>
+          <Camera size={22} color={busy || full ? tone.chalk : tone.ink} />
         </Pressable>
 
         <TextInput

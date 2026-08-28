@@ -15,7 +15,7 @@ import {
   useWithdrawSupport,
 } from '../../src/data/queries';
 import type { Status } from '../../src/domain/issue';
-import { categoryLabel, contributionsOpen, fullMoment, severityLabel, onTrack } from '../../src/domain/issue';
+import { MAX_PHOTOS, categoryLabel, contributionsOpen, fullMoment, severityLabel, onTrack } from '../../src/domain/issue';
 import { CategoryPlate } from '../../src/features/issues/CategoryPlate';
 import { FixDatePoll } from '../../src/features/issues/FixDatePoll';
 import { Gallery } from '../../src/features/issues/Gallery';
@@ -128,9 +128,10 @@ export default function IssueDetail() {
 
   const addPhoto = async () => {
     if (requireSignIn()) return;
+    if (attached.length >= MAX_PHOTOS) return;
     try {
       const uri = await camera.capture();
-      if (uri) setAttached((prev) => [...prev, uri]);
+      if (uri) setAttached((prev) => prev.slice(0, MAX_PHOTOS - 1).concat(uri));
     } catch (e) {
       Alert.alert('Could not add photo', (e as Error).message);
     }

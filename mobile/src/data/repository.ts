@@ -95,7 +95,10 @@ export interface LocationService {
 }
 
 export interface PhotoSource {
+  /** Evidence: taken through the app, never chosen from the library. */
   capture(): Promise<string | null>;
+  /** A profile picture, which is not evidence and may come from the library. */
+  pickAvatar(): Promise<string | null>;
 }
 
 export class ApiError extends Error {

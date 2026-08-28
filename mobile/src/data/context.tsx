@@ -57,7 +57,13 @@ export const liveServices = (): Services => ({
   users: new ApiUsersRepository(),
   auth: new ApiAuthGateway(),
   location: new DeviceLocationService(),
-  photos: new CameraPhotoSource(process.env.EXPO_PUBLIC_PHOTO_SOURCE === 'library' ? 'library' : 'camera'),
+  // Evidence has to be taken in the moment, so the library is never an option
+  // in a real build. __DEV__ is what makes that a guarantee rather than a
+  // default: a release bundle cannot reach the picker whatever the env says,
+  // while a simulator with no camera can still be worked on.
+  photos: new CameraPhotoSource(
+    __DEV__ && process.env.EXPO_PUBLIC_PHOTO_SOURCE === 'library' ? 'library' : 'camera',
+  ),
 });
 
 const ServicesContext = createContext<Services | null>(null);

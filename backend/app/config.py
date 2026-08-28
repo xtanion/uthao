@@ -53,7 +53,9 @@ class Settings(BaseSettings):
     default_limit: int = 20
     max_limit: int = 100
 
-    max_photos_per_report: int = 5
+    # Evidence is what someone photographed while standing there, so a handful
+    # is the point rather than an album. Applies to a report and to a support.
+    max_photos_per_upload: int = 3
     max_photo_bytes: int = 12 * 1024 * 1024
     thumbnail_width: int = 800
     stored_image_width: int = 1920

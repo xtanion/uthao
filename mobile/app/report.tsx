@@ -6,7 +6,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useServices } from '../src/data/context';
-import { CATEGORIES, SEVERITIES, categoryLabel, severityLabel } from '../src/domain/issue';
+import { CATEGORIES, MAX_PHOTOS, SEVERITIES, categoryLabel, severityLabel } from '../src/domain/issue';
 import type { Category, Duplicate, GeoPoint, Severity } from '../src/domain/issue';
 import { DuplicateSheet } from '../src/features/issues/DuplicateSheet';
 import { CategoryGlyph } from '../src/features/issues/glyphs';
@@ -45,10 +45,13 @@ export default function Report() {
    * neither branch has to ask the device for a fix a second time. */
   const [nearby, setNearby] = useState<{ point: GeoPoint; candidates: Duplicate[] } | null>(null);
 
+  const full = attached.length >= MAX_PHOTOS;
+
   const addPhoto = async () => {
+    if (full) return;
     try {
       const uri = await photos.capture();
-      if (uri) setAttached((prev) => [...prev, uri]);
+      if (uri) setAttached((prev) => prev.slice(0, MAX_PHOTOS - 1).concat(uri));
     } catch (e) {
       Alert.alert('Could not add photo', (e as Error).message);
     }
@@ -156,7 +159,11 @@ export default function Report() {
                   : 'Tap to take a photo'}
               </Text>
               <Text style={[t.meta(11, '500', 0.6), { color: tone.chalk, marginTop: 4 }]}>
-                {attached.length ? 'Tap to add another' : 'A photo is required'}
+                {full
+                  ? `${MAX_PHOTOS} is the most you can attach`
+                  : attached.length
+                    ? `Tap to add another, ${MAX_PHOTOS - attached.length} left`
+                    : 'Take one here; you cannot choose from your library'}
               </Text>
             </View>
           )}

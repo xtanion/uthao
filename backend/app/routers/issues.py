@@ -145,9 +145,9 @@ async def _processed_photos(
         if not required:
             return []
         raise _unprocessable("Attach at least one photo.")
-    if len(usable) > settings.max_photos_per_report:
+    if len(usable) > settings.max_photos_per_upload:
         raise _unprocessable(
-            f"Attach at most {settings.max_photos_per_report} photos."
+            f"Attach at most {settings.max_photos_per_upload} photos."
         )
     processed = []
     for photo in usable:

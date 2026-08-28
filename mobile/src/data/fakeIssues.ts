@@ -456,6 +456,10 @@ export class FixedLocationService implements LocationService {
 /** Simulators have no camera, so demo runs hand back a placeholder path. */
 export class StubPhotoSource implements PhotoSource {
   private count = 0;
+  async pickAvatar() {
+    return this.capture();
+  }
+
   async capture() {
     return `demo://photo_${++this.count}.jpg`;
   }

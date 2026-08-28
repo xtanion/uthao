@@ -69,7 +69,7 @@ export default function EditProfile() {
   const pick = async () => {
     setError(null);
     try {
-      const uri = await photos.capture();
+      const uri = await photos.pickAvatar();
       if (uri) await setAvatar.mutateAsync(uri);
     } catch (e) {
       setError((e as Error).message);

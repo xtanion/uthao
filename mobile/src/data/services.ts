@@ -97,6 +97,8 @@ export async function sanitize(uri: string): Promise<string> {
 }
 
 export class CameraPhotoSource implements PhotoSource {
+  /** 'library' is a simulator affordance and is gated on __DEV__ by the
+   *  caller; a shipped build always takes the camera path. */
   constructor(private source: 'camera' | 'library' = 'camera') {}
 
   async capture() {
@@ -105,13 +107,30 @@ export class CameraPhotoSource implements PhotoSource {
         ? await ImagePicker.requestCameraPermissionsAsync()
         : await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
-      throw new Error('Camera access is needed to attach evidence.');
+      throw new Error(
+        this.source === 'camera'
+          ? 'Camera access is needed. Evidence has to be photographed here, not chosen from your library.'
+          : 'Photo access is needed to attach evidence.',
+      );
     }
     const picker =
       this.source === 'camera'
         ? ImagePicker.launchCameraAsync
         : ImagePicker.launchImageLibraryAsync;
     const result = await picker({ quality: 0.9, exif: false });
+    if (result.canceled) return null;
+    return sanitize(result.assets[0].uri);
+  }
+
+  async pickAvatar() {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      throw new Error('Photo access is needed to choose a picture.');
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      quality: 0.9,
+      exif: false,
+    });
     if (result.canceled) return null;
     return sanitize(result.assets[0].uri);
   }
