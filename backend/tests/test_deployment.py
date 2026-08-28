@@ -56,7 +56,9 @@ async def test_the_phone_number_is_gone_and_reusable(client, sender):
     await client.delete("/me", headers=auth(token))
 
     row = await load_user(old)
-    assert row.phone == f"deleted:{old}"
+    # Null, not a tombstone: a tombstone has to be unique, does not fit a
+    # phone-sized column, and leaves something number-shaped behind.
+    assert row.phone is None
     assert row.display_name == "Removed resident"
     assert row.deleted_at is not None
 
@@ -318,3 +320,73 @@ async def test_health_reports_the_database(client):
     assert body["database"] == "up"
     assert body["storage"] == "local"
     assert body["mail"] == "off"
+
+
+# --- connection strings ----------------------------------------------------
+
+CONNECTION_STRINGS = [
+    # What every managed Postgres actually hands you.
+    (
+        "postgresql://u:p@db.example.com/fihy?sslmode=require",
+        "postgresql+asyncpg://u:p@db.example.com/fihy",
+        {"ssl": "require"},
+    ),
+    # Heroku-style scheme, and a parameter asyncpg does not take at all.
+    (
+        "postgres://u:p@db.example.com:5432/fihy?sslmode=verify-full&channel_binding=require",
+        "postgresql+asyncpg://u:p@db.example.com:5432/fihy",
+        {"ssl": "verify-full"},
+    ),
+    # Already correct, left alone.
+    ("postgresql+asyncpg://u:p@db/fihy", "postgresql+asyncpg://u:p@db/fihy", {}),
+    # Anything that is not libpq-only survives.
+    (
+        "postgresql://u:p@db/fihy?application_name=fihy&sslmode=disable",
+        "postgresql+asyncpg://u:p@db/fihy?application_name=fihy",
+        {"ssl": "disable"},
+    ),
+    ("sqlite+aiosqlite:///./fihy.db", "sqlite+aiosqlite:///./fihy.db", {"check_same_thread": False}),
+    # Supabase's transaction pooler. Both prepared-statement caches have to be
+    # off or asyncpg fails under load, not immediately.
+    (
+        "postgresql://postgres.abc:pw@aws-0-ap-south-1.pooler.supabase.com:6543/postgres?sslmode=require",
+        "postgresql+asyncpg://postgres.abc:pw@aws-0-ap-south-1.pooler.supabase.com:6543"
+        "/postgres?prepared_statement_cache_size=0",
+        {"ssl": "require", "statement_cache_size": 0},
+    ),
+    # Direct connection to the same project: caching is fine and worth keeping.
+    (
+        "postgresql://postgres:pw@db.abc.supabase.co:5432/postgres?sslmode=require",
+        "postgresql+asyncpg://postgres:pw@db.abc.supabase.co:5432/postgres",
+        {"ssl": "require"},
+    ),
+]
+
+
+@pytest.mark.parametrize("given,expected_url,expected_args", CONNECTION_STRINGS)
+def test_connection_strings_are_normalised(given, expected_url, expected_args):
+    """asyncpg spells it `ssl`, not `sslmode`, and would otherwise fail with an
+    unexpected-keyword error on the first connection of a deploy."""
+    from app.db import normalized
+
+    assert normalized(given) == (expected_url, expected_args)
+
+
+def test_a_placeholder_password_says_so():
+    """urlsplit would otherwise read the brackets as an IPv6 literal and
+    complain about the hostname, which is the wrong place to go looking."""
+    from app.db import normalized
+
+    with pytest.raises(ValueError, match="placeholder password"):
+        normalized("postgresql://postgres:[YOUR-PASSWORD]@db.abc.supabase.co:5432/postgres")
+
+
+def test_a_real_ipv6_host_still_works():
+    """Supabase's direct connection is IPv6-only, so the brackets that matter
+    must survive the check for the brackets that do not."""
+    from app.db import normalized
+
+    url, args = normalized("postgresql://u:p@[2406:da1a::5]:5432/fihy?sslmode=require")
+
+    assert url == "postgresql+asyncpg://u:p@[2406:da1a::5]:5432/fihy"
+    assert args == {"ssl": "require"}

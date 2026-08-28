@@ -3,17 +3,23 @@ import asyncio
 from alembic import context
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
-from sqlalchemy.ext.asyncio import async_engine_from_config
+from sqlalchemy.ext.asyncio import create_async_engine
 
-from app.config import get_settings
+from app.db import normalized
 from app.models import Base
 
 config = context.config
 target_metadata = Base.metadata
 
 
-def _url() -> str:
-    return get_settings().database_url
+def _url() -> tuple[str, dict]:
+    """The same normalisation the app uses. Reading the raw setting here would
+    hand `postgresql://` to the default psycopg2 driver, which is not what is
+    installed, and the migration would fail on a driver import rather than on
+    anything to do with the schema."""
+    from app.config import get_settings
+
+    return normalized(get_settings().database_url)
 
 
 def _configure(connection: Connection) -> None:
@@ -29,8 +35,9 @@ def _configure(connection: Connection) -> None:
 
 
 def run_offline() -> None:
+    url, _ = _url()
     context.configure(
-        url=_url(),
+        url=url,
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
@@ -46,9 +53,10 @@ def _run(connection: Connection) -> None:
 
 
 async def run_online() -> None:
-    section = config.get_section(config.config_ini_section, {})
-    section["sqlalchemy.url"] = _url()
-    engine = async_engine_from_config(section, prefix="sqlalchemy.", poolclass=pool.NullPool)
+    url, connect_args = _url()
+    engine = create_async_engine(
+        url, connect_args=connect_args, poolclass=pool.NullPool
+    )
     async with engine.connect() as connection:
         await connection.run_sync(_run)
     await engine.dispose()

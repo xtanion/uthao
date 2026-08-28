@@ -103,6 +103,19 @@ that a unique constraint arbitrates, so two overlapping runs cannot both send.
 docker build -t fihy-backend backend
 ```
 
+`DATABASE_URL` takes whatever the provider hands you. `db.normalized()`
+upgrades `postgres://` and `postgresql://` to the asyncpg dialect, translates
+`?sslmode=` (asyncpg spells it `ssl`, and would otherwise fail with an
+unexpected-keyword error on the first connection), and drops libpq-only
+parameters.
+
+It also notices a connection pooler - port 6543, or a `pooler.`/`pgbouncer`
+host - and turns off both prepared-statement caches. Supavisor and PgBouncer in
+transaction mode hand each query a different backend, so a statement prepared
+on one is missing on the next; asyncpg prepares everything by default, and the
+failure shows up under load rather than on the first request. Migrations should
+still run over the direct or session connection, not the transaction pooler.
+
 One worker per container; scale with replicas. That is why `AUTO_MIGRATE` must
 be `false` in a deployment — several workers racing the same upgrade is the
 footgun it exists to avoid — and why the crons run from the scheduler rather

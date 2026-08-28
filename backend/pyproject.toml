@@ -20,7 +20,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-postgres = ["asyncpg>=0.30"]
+postgres = [
+    "asyncpg>=0.30",
+]
 
 [dependency-groups]
 dev = [

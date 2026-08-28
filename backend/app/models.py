@@ -51,7 +51,13 @@ class User(Base):
     __tablename__ = "users"
 
     id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
-    phone: Mapped[str] = mapped_column(String(20), unique=True, index=True)
+    # Nullable only so a closed account can give the number back: deleting it
+    # is the point, and a tombstone string would have to be unique, would not
+    # fit in a phone-sized column, and would still be a number-shaped thing
+    # sitting where a number used to be. Live accounts always have one.
+    phone: Mapped[str | None] = mapped_column(
+        String(20), unique=True, index=True, default=None
+    )
     display_name: Mapped[str] = mapped_column(String(80))
     avatar_key: Mapped[str | None] = mapped_column(String(400), default=None)
     # Set when the person closed their account. The row survives so the reports

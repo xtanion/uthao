@@ -1144,9 +1144,10 @@ async def delete_account(
     await session.execute(delete(OtpChallenge).where(OtpChallenge.phone == user.phone))
     await session.execute(delete(OtpRequestLog).where(OtpRequestLog.phone == user.phone))
 
-    # The column is unique, so the tombstone has to be too. Nothing can sign in
-    # with it, and the real number is gone.
-    user.phone = f"deleted:{user.id}"
+    # Null rather than a tombstone: the unique index permits many nulls, so the
+    # number is free for a new account, and nothing is left that looks like one.
+    # Sign-in matches on equality, which a null never satisfies.
+    user.phone = None
     user.display_name = DELETED_NAME
     user.avatar_key = None
     user.deleted_at = utcnow()

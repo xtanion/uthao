@@ -14,7 +14,12 @@ def environment(tmp_path_factory) -> None:
         {
             "ENVIRONMENT": "test",
             "SECRET_KEY": "test-secret-key-long-enough-for-hmac-sha256",
-            "DATABASE_URL": f"sqlite+aiosqlite:///{root / 'test.db'}",
+            # SQLite by default because it is fast. CI also runs the whole
+            # suite against PostgreSQL, because SQLite does not enforce VARCHAR
+            # lengths and will happily store a value the real database rejects.
+            "DATABASE_URL": os.environ.get(
+                "TEST_DATABASE_URL", f"sqlite+aiosqlite:///{root / 'test.db'}"
+            ),
             "MEDIA_ROOT": str(root / "media"),
             "PUBLIC_BASE_URL": "http://test",
             "R2_ACCOUNT_ID": "",
