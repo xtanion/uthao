@@ -12,7 +12,7 @@ import { NotificationsScreen } from '../notifications/NotificationsScreen';
 import { SearchScreen } from '../search/SearchScreen';
 import { metric, type as t, useTone } from '../../theme/tokens';
 import { Avatar } from '../profile/Avatar';
-import { ChromeProvider, useChrome } from './chrome';
+import { ChromeProvider, useBarOffset, useChrome } from './chrome';
 import { NavIcon, type NavIconName } from './NavIcon';
 
 const SECTIONS: NavIconName[] = ['house', 'search', 'bell'];
@@ -34,7 +34,11 @@ function Shell() {
   const { auth } = useServices();
   const [tab, setTab] = useState(0);
   const [section, setSection] = useState(0);
-  const { visible: chromeVisible, show } = useChrome();
+  const { insets, measure, show } = useChrome();
+  // Each bar clears its own height, so the shorter dock is gone while the
+  // taller header is still on its way out — which is what X does.
+  const headerOffset = useBarOffset(insets.top || 160);
+  const dockOffset = useBarOffset(insets.bottom || DOCK_HEIGHT);
   const location = useLocation();
 
   // currentUserId is a plain read rather than state, so returning from the
@@ -46,8 +50,6 @@ function Shell() {
   const unread = useUnreadCount(signedIn);
   const me = useProfile(signedIn ? auth.currentUserId() : null);
 
-  const mapImmersive = !chromeVisible && section === 0 && tab === 1;
-
   const openSection = useCallback(
     (next: number) => {
       setSection(next);
@@ -56,23 +58,39 @@ function Shell() {
     [show],
   );
 
-  // The dock's own height is the FAB's floor, so the button keeps the same gap
-  // above whatever is below it in either state.
-  const lift = useRef(new Animated.Value(1)).current;
-  useEffect(() => {
-    Animated.timing(lift, {
-      toValue: chromeVisible ? 1 : 0,
-      duration: 180,
-      useNativeDriver: true,
-    }).start();
-  }, [chromeVisible, lift]);
 
   return (
     <View style={{ flex: 1, backgroundColor: tone.bg }}>
-      {!mapImmersive && (
-        <SafeAreaView edges={['top']} style={{ backgroundColor: tone.bg }}>
-          {chromeVisible && (
-            <View style={styles.masthead}>
+      <View style={StyleSheet.absoluteFill}>
+        {section === 2 ? (
+          <NotificationsScreen />
+        ) : (
+          <>
+            {location.isPending && <Centered><ActivityIndicator color={tone.accentDeep} /></Centered>}
+            {location.isError && <Notice text={(location.error as Error).message} />}
+            {location.data &&
+              (section === 1 ? (
+                <SearchScreen point={location.data} />
+              ) : tab === 0 ? (
+                <NearbyFeed point={location.data} />
+              ) : (
+                <MapScreen point={location.data} />
+              ))}
+          </>
+        )}
+      </View>
+
+      <Animated.View
+        onLayout={(e) => measure({ top: e.nativeEvent.layout.height })}
+        style={[
+          styles.topBar,
+          {
+            backgroundColor: tone.bg,
+            transform: [{ translateY: Animated.multiply(headerOffset, -1) }],
+          },
+        ]}>
+        <SafeAreaView edges={['top']}>
+          <View style={styles.masthead}>
               <View style={{ width: 34 }} />
               <Mark />
               <Pressable
@@ -98,9 +116,8 @@ function Shell() {
                   <User size={19} color={tone.chalk} />
                 )}
               </Pressable>
-            </View>
-          )}
-          {chromeVisible && section === 0 && (
+          </View>
+          {section === 0 && (
             <View style={[styles.tabs, { borderBottomColor: tone.hairline }]}>
               {['Nearby', 'Map'].map((label, i) => (
                 <Pressable key={label} style={styles.tab} onPress={() => setTab(i)}>
@@ -118,39 +135,13 @@ function Shell() {
             </View>
           )}
         </SafeAreaView>
-      )}
-
-      <View style={{ flex: 1 }}>
-        {section === 2 ? (
-          <NotificationsScreen />
-        ) : (
-          <>
-            {location.isPending && <Centered><ActivityIndicator color={tone.accentDeep} /></Centered>}
-            {location.isError && <Notice text={(location.error as Error).message} />}
-            {location.data &&
-              (section === 1 ? (
-                <SearchScreen point={location.data} />
-              ) : tab === 0 ? (
-                <NearbyFeed point={location.data} />
-              ) : (
-                <MapScreen point={location.data} />
-              ))}
-          </>
-        )}
-      </View>
+      </Animated.View>
 
       <Animated.View
         style={[
           styles.fab,
           {
-            transform: [
-              {
-                translateY: lift.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [DOCK_HEIGHT, 0],
-                }),
-              },
-            ],
+            transform: [{ translateY: dockOffset }],
           },
         ]}>
         <Pressable
@@ -160,8 +151,16 @@ function Shell() {
         </Pressable>
       </Animated.View>
 
-      {chromeVisible && (
-        <SafeAreaView edges={['bottom']} style={{ backgroundColor: tone.bg }}>
+      <Animated.View
+        onLayout={(e) => measure({ bottom: e.nativeEvent.layout.height })}
+        style={[
+          styles.dock,
+          {
+            backgroundColor: tone.bg,
+            transform: [{ translateY: dockOffset }],
+          },
+        ]}>
+        <SafeAreaView edges={['bottom']}>
           <View style={[styles.sectionBar, { borderTopColor: tone.hairline }]}>
             {SECTIONS.map((name, i) => (
               <Pressable key={name} style={styles.section} onPress={() => openSection(i)}>
@@ -181,7 +180,7 @@ function Shell() {
             ))}
           </View>
         </SafeAreaView>
-      )}
+      </Animated.View>
     </View>
   );
 }
@@ -205,17 +204,19 @@ function Mark() {
 const styles = StyleSheet.create({
   masthead: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: metric.gutter, paddingTop: 6, paddingBottom: 8,
+    paddingHorizontal: metric.gutter, paddingTop: 10, paddingBottom: 24,
   },
   avatar: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
   tabs: { flexDirection: 'row', borderBottomWidth: 1 },
-  tab: { flex: 1, alignItems: 'center' },
+  tab: { flex: 1, alignItems: 'center', paddingTop: 2 },
   indicator: { height: 3, width: 34, borderRadius: 2, marginTop: 8 },
   fab: { position: 'absolute', right: 20, bottom: 90, width: 58, height: 58 },
   fabButton: {
     width: 58, height: 58, borderRadius: 29,
     alignItems: 'center', justifyContent: 'center',
   },
+  topBar: { position: 'absolute', top: 0, left: 0, right: 0, zIndex: 2 },
+  dock: { position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 2 },
   sectionBar: { flexDirection: 'row', height: DOCK_HEIGHT, borderTopWidth: 1 },
   section: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   badge: {

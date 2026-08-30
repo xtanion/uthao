@@ -130,8 +130,10 @@ export default function IssueDetail() {
     if (requireSignIn()) return;
     if (attached.length >= MAX_PHOTOS) return;
     try {
-      const uri = await camera.capture();
-      if (uri) setAttached((prev) => prev.slice(0, MAX_PHOTOS - 1).concat(uri));
+      const shots = await camera.captureMany(MAX_PHOTOS - attached.length);
+      if (shots.length) {
+        setAttached((prev) => [...prev, ...shots].slice(0, MAX_PHOTOS));
+      }
     } catch (e) {
       Alert.alert('Could not add photo', (e as Error).message);
     }

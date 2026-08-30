@@ -390,3 +390,31 @@ def test_a_real_ipv6_host_still_works():
 
     assert url == "postgresql+asyncpg://u:p@[2406:da1a::5]:5432/fihy"
     assert args == {"ssl": "require"}
+
+
+def test_a_deployment_with_the_debug_otp_refuses_to_start(monkeypatch):
+    """It accepts one code for every phone number. In production that is not a
+    convenience, it is a way in."""
+    from app.config import get_settings
+    from app.main import create_app
+
+    monkeypatch.setenv("ENVIRONMENT", "production")
+    monkeypatch.setenv("SECRET_KEY", "a-real-secret-key-for-this-test-only")
+    monkeypatch.setenv("OTP_DEBUG_CODE", "123456")
+    for key, value in (
+        ("R2_ACCOUNT_ID", "acct"),
+        ("R2_ACCESS_KEY_ID", "key"),
+        ("R2_SECRET_ACCESS_KEY", "secret"),
+    ):
+        monkeypatch.setenv(key, value)
+    get_settings.cache_clear()
+    try:
+        with pytest.raises(RuntimeError, match="OTP_DEBUG_CODE"):
+            create_app()
+    finally:
+        for key in (
+            "ENVIRONMENT", "SECRET_KEY", "OTP_DEBUG_CODE",
+            "R2_ACCOUNT_ID", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY",
+        ):
+            monkeypatch.delenv(key, raising=False)
+        get_settings.cache_clear()

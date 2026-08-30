@@ -1,0 +1,41 @@
+app = "fihy-backend"
+primary_region = "bom"
+
+[build]
+  dockerfile = "Dockerfile"
+
+# Runs in a temporary Machine before the new ones take traffic, so a deploy
+# whose migration fails never reaches users. AUTO_MIGRATE stays off because of
+# it: several workers racing the same upgrade is what that flag exists to stop.
+[deploy]
+  release_command = "alembic upgrade head"
+  strategy = "rolling"
+
+[env]
+  ENVIRONMENT = "production"
+  AUTO_MIGRATE = "false"
+  PUBLIC_DOCS = "false"
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  # Never scale to zero. A cold start on the first report of the day is a
+  # person standing in the road waiting, and the health check needs something
+  # to talk to anyway.
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    path = "/health"
+    method = "GET"
+    interval = "30s"
+    timeout = "5s"
+    # Long enough for the release command to have finished and the pool to
+    # have opened before the first check counts against the machine.
+    grace_period = "20s"
+
+[[vm]]
+  memory = "512mb"
+  cpu_kind = "shared"
+  cpus = 1

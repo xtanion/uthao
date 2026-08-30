@@ -47,6 +47,9 @@ function Routes() {
         headerStyle: { backgroundColor: tone.bg },
         headerTintColor: tone.ink,
         headerShadowVisible: false,
+        // Otherwise iOS labels the back button with the previous route's
+        // title, which for the shell is literally "index".
+        headerBackButtonDisplayMode: 'minimal',
         contentStyle: { backgroundColor: tone.bg },
       }}>
       <Stack.Screen name="index" options={{ headerShown: false }} />

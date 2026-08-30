@@ -1,12 +1,18 @@
 import { useRouter } from 'expo-router';
 import React, { useCallback, useMemo } from 'react';
-import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Animated, FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { useConfirm, useNearbyFeed } from '../../data/queries';
 import { useServices } from '../../data/context';
 import type { GeoPoint, Issue } from '../../domain/issue';
 import { metric, type as t, useTone } from '../../theme/tokens';
-import { useChromeOnScroll } from '../shell/chrome';
+import { useChromeOnScroll, useChromeSpacing } from '../shell/chrome';
 import { IssueCard } from './IssueCard';
+
+
+/** Native-driven onScroll needs an explicitly animated list. */
+const ScrollList = Animated.createAnimatedComponent(
+  FlatList,
+) as unknown as typeof FlatList;
 
 export function NearbyFeed({ point }: { point: GeoPoint }) {
   const tone = useTone();
@@ -15,6 +21,7 @@ export function NearbyFeed({ point }: { point: GeoPoint }) {
   const confirm = useConfirm();
   const feed = useNearbyFeed(point);
   const chrome = useChromeOnScroll();
+  const spacing = useChromeSpacing(96);
 
   const issues = useMemo(
     () => feed.data?.pages.flatMap((p) => p.items) ?? [],
@@ -39,15 +46,20 @@ export function NearbyFeed({ point }: { point: GeoPoint }) {
   }
 
   return (
-    <FlatList
+    <ScrollList
       data={issues}
       keyExtractor={(issue) => issue.id}
       {...chrome}
-      contentContainerStyle={{ paddingBottom: 96 }}
+      contentContainerStyle={spacing}
       onEndReachedThreshold={0.6}
       onEndReached={() => feed.hasNextPage && !feed.isFetchingNextPage && feed.fetchNextPage()}
       refreshControl={
-        <RefreshControl refreshing={feed.isRefetching} onRefresh={feed.refetch} tintColor={tone.accentDeep} />
+        <RefreshControl
+          refreshing={feed.isRefetching}
+          onRefresh={feed.refetch}
+          tintColor={tone.accentDeep}
+          progressViewOffset={spacing.paddingTop}
+        />
       }
       ListFooterComponent={
         feed.isFetchingNextPage ? (

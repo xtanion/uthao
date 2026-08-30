@@ -1,7 +1,9 @@
 .venv
 var
 *.db
+.env
 .pytest_cache
 __pycache__
 tests
 README.md
+fly.toml

@@ -2,6 +2,7 @@ import { useRouter } from 'expo-router';
 import { Search, X } from 'lucide-react-native';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  Animated,
   ActivityIndicator,
   FlatList,
   Pressable,
@@ -20,11 +21,17 @@ import { metric, type as t, useTone } from '../../theme/tokens';
 import { CategoryGlyph } from '../issues/glyphs';
 import { IssueCard } from '../issues/IssueCard';
 import { Centered, Notice } from '../issues/NearbyFeed';
-import { useChromeOnScroll } from '../shell/chrome';
+import { useChrome, useChromeOnScroll } from '../shell/chrome';
 
 const RANGE_KM = SEARCH_RADIUS_M / 1000;
 
 /** Keystrokes are cheap; round trips are not. */
+
+/** Native-driven onScroll needs an explicitly animated list. */
+const ScrollList = Animated.createAnimatedComponent(
+  FlatList,
+) as unknown as typeof FlatList;
+
 function useDebounced<T>(value: T, ms = 300): T {
   const [settled, setSettled] = useState(value);
   useEffect(() => {
@@ -40,6 +47,7 @@ export function SearchScreen({ point }: { point: GeoPoint }) {
   const { auth } = useServices();
   const confirm = useConfirm();
   const chrome = useChromeOnScroll();
+  const { insets } = useChrome();
 
   const [text, setText] = useState('');
   const [category, setCategory] = useState<Category | undefined>();
@@ -66,7 +74,7 @@ export function SearchScreen({ point }: { point: GeoPoint }) {
   );
 
   return (
-    <View style={{ flex: 1 }}>
+    <View style={{ flex: 1, paddingTop: insets.top }}>
       <View style={styles.fieldRow}>
         <View style={[styles.field, { backgroundColor: tone.surface, borderColor: tone.hairline }]}>
           <Search size={17} color={text ? tone.ink : tone.chalk} />
@@ -133,13 +141,13 @@ export function SearchScreen({ point }: { point: GeoPoint }) {
           }
         />
       ) : (
-        <FlatList
+        <ScrollList
           data={issues}
           keyExtractor={(issue) => issue.id}
           {...chrome}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
-          contentContainerStyle={{ paddingBottom: 96 }}
+          contentContainerStyle={{ paddingBottom: insets.bottom + 96 }}
           ListHeaderComponent={
             <Text style={[t.meta(11, '600', 0), styles.count, { color: tone.chalk }]}>
               {issues.length}

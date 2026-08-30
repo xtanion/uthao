@@ -99,8 +99,62 @@ that a unique constraint arbitrates, so two overlapping runs cannot both send.
 
 ## Deploying
 
+Fly, `bom` (Mumbai). `fly.toml` is in this directory and the Dockerfile is used
+as-is.
+
 ```bash
-docker build -t fihy-backend backend
+brew install flyctl && fly auth login
+fly apps create fihy-backend
+
+# SECRET_KEY first - the script refuses to send the development default.
+openssl rand -hex 32
+
+./scripts/fly-secrets.sh          # stages the allowlist from .env
+fly deploy
+```
+
+The allowlist in that script is deliberate. `OTP_DEBUG_CODE` accepts one code
+for every phone number, so it must never reach production; the app refuses to
+boot on it, and on a default `SECRET_KEY`, and without R2 - but not shipping
+them is the better guard.
+
+Set `PUBLIC_BASE_URL` to the deployed URL once Fly has assigned one, or the
+`/media` fallback links point at localhost.
+
+Fly has native IPv6, so the Supabase **direct** connection string works. On a
+host without it, use the transaction pooler on `:6543` - the code detects it
+and turns off both prepared-statement caches.
+
+### The crons
+
+Scheduled Machines, created once. They start, run one job, and exit.
+
+```bash
+IMAGE=$(fly image show --json | jq -r .Ref)
+fly machine run "$IMAGE" --schedule hourly python -m app.jobs escalate
+fly machine run "$IMAGE" --schedule daily  python -m app.jobs check
+fly machine run "$IMAGE" --schedule daily  python -m app.jobs prune
+```
+
+The intervals are fuzzy, which all three tolerate: escalate already waits
+`ESCALATE_AFTER_HOURS` before touching anything, and the other two are
+housekeeping. Re-point them at a new image after a deploy that changes the
+jobs. Nothing schedules itself in-process - under several web machines every
+tick would fire once per machine, and for a job that sends letters to a
+municipal body that is the wrong mistake to make quietly.
+
+### Checks
+
+```bash
+curl https://fihy-backend.fly.dev/health
+```
+
+wants `"database": "up"` and `"storage": "r2"`. `/health` touches the database
+and answers `503` when it cannot, which is what the Fly health check reads, so
+a machine whose pool has died stops taking traffic.
+
+```bash
+docker build -t fihy-backend backend   # the same image, locally
 ```
 
 `DATABASE_URL` takes whatever the provider hands you. `db.normalized()`

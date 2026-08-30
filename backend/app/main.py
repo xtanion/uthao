@@ -50,6 +50,13 @@ def create_app() -> FastAPI:
             "SECRET_KEY is still the development default. Set a real one before "
             f"running with ENVIRONMENT={settings.environment}."
         )
+    if not settings.is_local and settings.otp_debug_code:
+        raise RuntimeError(
+            "OTP_DEBUG_CODE is set. It accepts one code for every phone number, "
+            "so anybody could sign in as anybody. Unset it before running with "
+            f"ENVIRONMENT={settings.environment}."
+        )
+
     if not settings.is_local and not settings.storage_configured:
         raise RuntimeError(
             "R2 is not configured. Photos would be written to the container's "

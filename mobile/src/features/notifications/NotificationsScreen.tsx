@@ -2,6 +2,7 @@ import { useRouter } from 'expo-router';
 import { ArrowUp } from 'lucide-react-native';
 import React, { useCallback, useMemo } from 'react';
 import {
+  Animated,
   ActivityIndicator,
   FlatList,
   Pressable,
@@ -18,7 +19,13 @@ import { notificationContext, notificationLine } from '../../domain/notification
 import { metric, type as t, useTone } from '../../theme/tokens';
 import { StatusGlyph } from '../issues/glyphs';
 import { Centered, Notice } from '../issues/NearbyFeed';
-import { useChromeOnScroll } from '../shell/chrome';
+import { useChromeOnScroll, useChromeSpacing } from '../shell/chrome';
+
+
+/** Native-driven onScroll needs an explicitly animated list. */
+const ScrollList = Animated.createAnimatedComponent(
+  FlatList,
+) as unknown as typeof FlatList;
 
 export function NotificationsScreen() {
   const tone = useTone();
@@ -28,6 +35,7 @@ export function NotificationsScreen() {
   const feed = useNotifications(signedIn);
   const markRead = useMarkNotificationsRead();
   const chrome = useChromeOnScroll();
+  const spacing = useChromeSpacing(96);
 
   const items = useMemo(
     () => feed.data?.pages.flatMap((p) => p.items) ?? [],
@@ -73,16 +81,17 @@ export function NotificationsScreen() {
   }
 
   return (
-    <FlatList
+    <ScrollList
       data={items}
       keyExtractor={(item) => item.id}
       {...chrome}
-      contentContainerStyle={{ paddingBottom: 96 }}
+      contentContainerStyle={spacing}
       refreshControl={
         <RefreshControl
           refreshing={feed.isRefetching}
           onRefresh={feed.refetch}
           tintColor={tone.accentDeep}
+          progressViewOffset={spacing.paddingTop}
         />
       }
       ListHeaderComponent={

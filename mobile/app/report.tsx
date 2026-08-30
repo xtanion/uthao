@@ -50,8 +50,10 @@ export default function Report() {
   const addPhoto = async () => {
     if (full) return;
     try {
-      const uri = await photos.capture();
-      if (uri) setAttached((prev) => prev.slice(0, MAX_PHOTOS - 1).concat(uri));
+      const shots = await photos.captureMany(MAX_PHOTOS - attached.length);
+      if (shots.length) {
+        setAttached((prev) => [...prev, ...shots].slice(0, MAX_PHOTOS));
+      }
     } catch (e) {
       Alert.alert('Could not add photo', (e as Error).message);
     }
@@ -143,17 +145,24 @@ export default function Report() {
       </View>
 
       <ScrollView keyboardShouldPersistTaps="handled">
-        <Pressable onPress={addPhoto} style={{ height: wellHeight, backgroundColor: tone.surface }}>
+        <Pressable
+          onPress={addPhoto}
+          style={{
+            height: wellHeight,
+            backgroundColor: preview ? tone.surface : tone.bg,
+          }}>
           {preview && !preview.startsWith('demo://') ? (
             <Image source={{ uri: preview }} style={{ flex: 1 }} resizeMode="cover" />
           ) : (
             <View style={styles.well}>
-              {attached.length ? (
-                <CircleCheck size={40} color={tone.accentDeep} />
-              ) : (
-                <Camera size={40} color={tone.ink} />
-              )}
-              <Text style={[t.display(15, '500'), { color: tone.ink, marginTop: 12 }]}>
+              <View style={[styles.disc, { backgroundColor: tone.surface }]}>
+                {attached.length ? (
+                  <CircleCheck size={34} color={tone.accentDeep} />
+                ) : (
+                  <Camera size={34} color={tone.ink} />
+                )}
+              </View>
+              <Text style={[t.display(15, '500'), { color: tone.ink, marginTop: 16 }]}>
                 {attached.length
                   ? `${attached.length} photo${attached.length === 1 ? '' : 's'} attached`
                   : 'Tap to take a photo'}
@@ -299,6 +308,10 @@ const styles = StyleSheet.create({
   },
   publish: { paddingHorizontal: 20, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   well: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  disc: {
+    width: 84, height: 84, borderRadius: 42,
+    alignItems: 'center', justifyContent: 'center',
+  },
   caption: {
     paddingHorizontal: metric.gutter, paddingTop: 16, paddingBottom: 8,
     fontSize: 17, minHeight: 72, textAlignVertical: 'top',
