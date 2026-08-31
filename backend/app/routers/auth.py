@@ -1,9 +1,9 @@
 from fastapi import APIRouter, HTTPException, Response, status
 
-from .. import otp
+from .. import firebase, otp
 from ..deps import ClientIp, SessionDep
 from ..models import User
-from ..schemas import OtpRequestIn, OtpVerifyIn, RefreshIn, TokenOut
+from ..schemas import FirebaseSignInIn, OtpRequestIn, OtpVerifyIn, RefreshIn, TokenOut
 from ..security import TokenInvalid, create_access_token, create_refresh_token, read_token
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -41,6 +41,35 @@ async def verify_code(body: OtpVerifyIn, session: SessionDep) -> TokenOut:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)
         ) from exc
+    return _tokens(user)
+
+
+@router.post("/firebase", response_model=TokenOut)
+async def sign_in_with_firebase(
+    body: FirebaseSignInIn, session: SessionDep
+) -> TokenOut:
+    """Exchange a Firebase ID token for ours.
+
+    Firebase has already verified the phone number by SMS, which is the part
+    that would otherwise need a DLT registration. Everything past this point is
+    identical to the OTP path: the same account, keyed on the same phone
+    number, and the same pair of tokens back.
+    """
+    verifier = firebase.get_verifier()
+    if verifier is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Signing in with Firebase is not available.",
+        )
+    try:
+        verified = await verifier.verify(body.id_token)
+    except firebase.TokenRejected as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)
+        ) from exc
+
+    user = await otp.upsert_user(session, verified.phone)
+    await session.commit()
     return _tokens(user)
 
 

@@ -20,6 +20,24 @@ class Severity(StrEnum):
     HIGH = "high"
 
 
+class ContactChannel(StrEnum):
+    """How a complaint can actually reach a body.
+
+    Most Indian corporations publish a portal and a helpline but no
+    complaint mailbox, so this is what says whether a letter can be sent at
+    all rather than assuming every authority has an address.
+    """
+
+    EMAIL = "email"
+    PORTAL = "portal"
+    NONE = "none"
+
+
+class ContactPointKind(StrEnum):
+    DEPARTMENT = "department"
+    WARD = "ward"
+
+
 class Status(StrEnum):
     REPORTED = "reported"
     COMMUNITY_VERIFIED = "community_verified"

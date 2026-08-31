@@ -85,3 +85,52 @@ class TimeCursor:
             ValueError,
         ) as exc:
             raise InvalidCursor("That page link is no longer valid.") from exc
+
+
+@dataclass(frozen=True)
+class FeedCursor:
+    """Keyset position in the ranked home feed.
+
+    Carries the moment the ranking was pinned and the radius it settled on, so
+    every page of one scroll is scored against the same clock and drawn from
+    the same ring. Without those two, a report could cross a freshness
+    boundary mid-scroll and be served twice or skipped.
+    """
+
+    score: float
+    issue_id: str
+    pinned_at: str
+    radius_m: float
+
+    def encode(self) -> str:
+        raw = json.dumps(
+            {
+                "s": self.score,
+                "i": self.issue_id,
+                "t": self.pinned_at,
+                "r": self.radius_m,
+            },
+            separators=(",", ":"),
+        ).encode()
+        return base64.urlsafe_b64encode(raw).decode().rstrip("=")
+
+    @classmethod
+    def decode(cls, value: str) -> "FeedCursor":
+        padded = value + "=" * (-len(value) % 4)
+        try:
+            payload = json.loads(base64.urlsafe_b64decode(padded))
+            return cls(
+                score=float(payload["s"]),
+                issue_id=str(payload["i"]),
+                pinned_at=str(payload["t"]),
+                radius_m=float(payload["r"]),
+            )
+        except (
+            binascii.Error,
+            UnicodeDecodeError,
+            json.JSONDecodeError,
+            KeyError,
+            TypeError,
+            ValueError,
+        ) as exc:
+            raise InvalidCursor("That page link is no longer valid.") from exc

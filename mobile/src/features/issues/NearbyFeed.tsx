@@ -1,7 +1,7 @@
 import { useRouter } from 'expo-router';
 import React, { useCallback, useMemo } from 'react';
 import { ActivityIndicator, Animated, FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native';
-import { useConfirm, useNearbyFeed } from '../../data/queries';
+import { useConfirm, useFeed } from '../../data/queries';
 import { useServices } from '../../data/context';
 import type { GeoPoint, Issue } from '../../domain/issue';
 import { metric, type as t, useTone } from '../../theme/tokens';
@@ -19,7 +19,7 @@ export function NearbyFeed({ point }: { point: GeoPoint }) {
   const router = useRouter();
   const { auth } = useServices();
   const confirm = useConfirm();
-  const feed = useNearbyFeed(point);
+  const feed = useFeed(point);
   const chrome = useChromeOnScroll();
   const spacing = useChromeSpacing(96);
 

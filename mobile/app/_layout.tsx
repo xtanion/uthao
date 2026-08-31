@@ -1,7 +1,13 @@
-import { QueryClient, QueryClientProvider, focusManager } from '@tanstack/react-query';
+import {
+  QueryClient,
+  QueryClientProvider,
+  focusManager,
+  onlineManager,
+} from '@tanstack/react-query';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect } from 'react';
+import * as Network from 'expo-network';
 import { AppState, useColorScheme } from 'react-native';
 import type { AppStateStatus } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -24,6 +30,22 @@ export default function RootLayout() {
     const subscription = AppState.addEventListener('change', (state: AppStateStatus) => {
       focusManager.setFocused(state === 'active');
     });
+    return () => subscription.remove();
+  }, []);
+
+  // And it assumes it is online unless told otherwise, which on a phone means
+  // refetchOnReconnect never fires. Reporting happens outdoors on patchy
+  // mobile data, so coming back into signal is the moment a stale feed most
+  // needs to catch up.
+  useEffect(() => {
+    const subscription = Network.addNetworkStateListener((state) => {
+      onlineManager.setOnline(Boolean(state.isInternetReachable ?? state.isConnected));
+    });
+    Network.getNetworkStateAsync()
+      .then((state) =>
+        onlineManager.setOnline(Boolean(state.isInternetReachable ?? state.isConnected)),
+      )
+      .catch(() => onlineManager.setOnline(true));
     return () => subscription.remove();
   }, []);
 

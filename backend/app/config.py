@@ -46,6 +46,19 @@ class Settings(BaseSettings):
     geofence_max_longitude: float = 97.5
 
     default_radius_m: float = 500.0
+    # The home feed widens through these until it has a full page, so a person
+    # standing somewhere quiet still opens the app to something.
+    feed_radius_ladder_m: tuple[float, ...] = (500.0, 2_000.0, 10_000.0, 50_000.0)
+    # Distance at which the proximity term is worth half. Not a cutoff.
+    feed_near_scale_m: float = 600.0
+    # Photo-backed supports beyond this add nothing; a report with eight is not
+    # twice as worth seeing as one with four.
+    feed_backing_cap: int = 4
+    # How the three pull against each other. Near matters most, because a
+    # problem you can walk to is the one you can confirm.
+    feed_weight_near: float = 1.0
+    feed_weight_fresh: float = 0.6
+    feed_weight_backed: float = 0.45
     # A new report within this of an existing one, in the same category, is
     # probably the same thing; the report screen offers to join it instead.
     duplicate_radius_m: float = 100.0
@@ -115,6 +128,10 @@ class Settings(BaseSettings):
     # summarizer is a no-op and ai_summary stays null.
     anthropic_api_key: str = ""
     ai_summary_model: str = "claude-opus-5"
+    # Classifying a report and choosing the desk it goes to. Separate from
+    # summaries because this one decides where a resident's complaint is sent,
+    # and turning it off should not cost the summaries.
+    ai_routing: bool = True
     # A summary is rewritten at most this often, however many people reply.
     ai_summary_min_interval_seconds: int = 300
 
@@ -132,6 +149,11 @@ class Settings(BaseSettings):
     # When set, this code is accepted for any phone and no SMS is sent. Leave
     # empty in anything user-facing.
     otp_debug_code: str = Field(default="")
+
+    # Firebase sends the SMS and holds the DLT registration India requires, so
+    # signing in needs no sender, header, or template of our own. Blank and
+    # /auth/firebase answers 503; the OTP path is unaffected either way.
+    firebase_project_id: str = ""
 
     @property
     def resolved_r2_endpoint(self) -> str:
@@ -163,6 +185,10 @@ class Settings(BaseSettings):
     @property
     def ai_summary_configured(self) -> bool:
         return bool(self.anthropic_api_key)
+
+    @property
+    def ai_routing_configured(self) -> bool:
+        return bool(self.anthropic_api_key and self.ai_routing)
 
     @property
     def storage_configured(self) -> bool:

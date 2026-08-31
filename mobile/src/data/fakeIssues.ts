@@ -24,6 +24,7 @@ import type {
   LocationService,
   NearbyQuery,
   NotificationsRepository,
+  FeedPage,
   Page,
   PhotoSource,
   UsersRepository,
@@ -191,6 +192,22 @@ export class FakeIssuesRepository implements IssuesRepository {
   /** Demo mode never raises anything with an authority. */
   async escalation() {
     return null;
+  }
+
+  /** Demo data all sits on one street, so the ladder never has to climb. */
+  async feed(_point: GeoPoint, cursor?: string | null): Promise<FeedPage> {
+    await sleep(pageLatency);
+    const ranked = [...this.visibleIssues()].sort(
+      (a, b) =>
+        b.photo_support_count - a.photo_support_count ||
+        b.created_at.localeCompare(a.created_at),
+    );
+    const page = this.page(ranked, cursor, PAGE_SIZE);
+    return { ...page, radius_m: 500, widened: false };
+  }
+
+  private visibleIssues(): Issue[] {
+    return this.issues.filter((i) => i.status !== 'removed');
   }
 
   async mine(cursor?: string | null): Promise<Page> {

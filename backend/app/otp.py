@@ -77,7 +77,12 @@ async def request_otp(session: AsyncSession, phone: str, ip: str) -> None:
     await _sender.send(phone, code)
 
 
-async def _upsert_user(session: AsyncSession, phone: str) -> User:
+async def upsert_user(session: AsyncSession, phone: str) -> User:
+    """Find or create the account for a verified number.
+
+    Shared with the Firebase path: however the number was verified, it is the
+    same person and the same account.
+    """
     user = await session.scalar(select(User).where(User.phone == phone))
     if user is not None:
         return user
@@ -99,7 +104,7 @@ async def _upsert_user(session: AsyncSession, phone: str) -> User:
 async def verify_otp(session: AsyncSession, phone: str, code: str) -> User:
     settings = get_settings()
     if settings.otp_debug_code and code == settings.otp_debug_code:
-        user = await _upsert_user(session, phone)
+        user = await upsert_user(session, phone)
         await session.commit()
         return user
 
@@ -126,6 +131,6 @@ async def verify_otp(session: AsyncSession, phone: str, code: str) -> User:
         raise rejected
 
     challenge.consumed_at = now
-    user = await _upsert_user(session, phone)
+    user = await upsert_user(session, phone)
     await session.commit()
     return user

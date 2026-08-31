@@ -20,6 +20,10 @@ export const PAGE_SIZE = 20;
 /** Opaque to the client: it round-trips whatever the backend hands back. */
 export type Page = { items: Issue[]; next_cursor: string | null };
 
+/** The home feed, plus how far it had to reach to fill itself.
+ *  `radius_m: null` means distance stopped being a filter entirely. */
+export type FeedPage = Page & { radius_m: number | null; widened: boolean };
+
 export type NearbyQuery = {
   point: GeoPoint;
   radiusM?: number;
@@ -40,6 +44,9 @@ export const DUPLICATE_RADIUS_M = 100;
 
 export interface IssuesRepository {
   nearby(query: NearbyQuery): Promise<Page>;
+  /** The home feed: ranked by proximity, freshness and backing, and widened
+   *  until it has something to show. */
+  feed(point: GeoPoint, cursor?: string | null): Promise<FeedPage>;
   get(id: string): Promise<Issue>;
   confirm(id: string): Promise<Issue>;
   unconfirm(id: string): Promise<Issue>;

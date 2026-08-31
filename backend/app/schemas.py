@@ -88,6 +88,17 @@ class Page(BaseModel):
     next_cursor: str | None = None
 
 
+class FeedPage(Page):
+    """The home feed, plus how far it had to reach to fill itself."""
+
+    # Null means the ladder was exhausted and distance stopped being a filter
+    # at all, so these came from wherever anybody has reported anything.
+    radius_m: float | None
+    # True when nothing was close enough and the ring was widened, so the app
+    # can say so rather than quietly showing somewhere else's problems.
+    widened: bool
+
+
 class DuplicateOut(BaseModel):
     """A report close enough that a new one is probably the same thing."""
 
@@ -173,6 +184,11 @@ class OtpRequestIn(BaseModel):
 class OtpVerifyIn(BaseModel):
     phone: str = Field(pattern=PHONE_PATTERN)
     code: str = Field(min_length=4, max_length=8)
+
+
+class FirebaseSignInIn(BaseModel):
+    # The ID token the app gets back from Firebase after the phone is verified.
+    id_token: str = Field(min_length=16, max_length=8192)
 
 
 class RefreshIn(BaseModel):

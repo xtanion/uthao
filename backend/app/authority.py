@@ -15,7 +15,11 @@ avoid.
 import logging
 from dataclasses import dataclass, field
 
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from .config import Settings, get_settings
+from .models import Authority, AuthorityContactPoint
 from .mail import (
     Attachment,
     OutboundEmail,
@@ -23,7 +27,7 @@ from .mail import (
     get_transport,
     reply_address,
 )
-from .enums import Status
+from .enums import ContactChannel, ContactPointKind, Status
 
 log = logging.getLogger(__name__)
 
@@ -71,6 +75,16 @@ class ConcernRequest:
 class AuthorityContact:
     name: str
     email: str | None
+    # Set when the body publishes somewhere to complain that is not an inbox.
+    # Nothing sends to these yet; they are carried so a letter that cannot be
+    # posted still knows where it should have gone.
+    channel: ContactChannel = ContactChannel.NONE
+    portal_url: str | None = None
+    helpline: str | None = None
+
+    @property
+    def reachable_by_email(self) -> bool:
+        return self.channel is ContactChannel.EMAIL and bool(self.email)
 
 
 @dataclass(frozen=True)
@@ -185,17 +199,106 @@ class LoggingAuthorityChannel(AuthorityChannel):
         return None
 
 
-def authority_for(locality: str | None) -> AuthorityContact:
-    """Which body owns the problem, and where to write to them.
-
-    One address for everywhere, until ward boundaries land: with no locality
-    there is nothing to look up, and guessing a department would put a wrong
-    name on a letter and send it to the wrong desk.
-    """
+def settings_contact() -> AuthorityContact:
+    """The fallback, and what a deployment with an empty table still does."""
     settings = get_settings()
+    email = settings.authority_email or None
     return AuthorityContact(
         name=settings.default_authority,
-        email=settings.authority_email or None,
+        email=email,
+        channel=ContactChannel.EMAIL if email else ContactChannel.NONE,
+    )
+
+
+async def authority_for(
+    session: AsyncSession,
+    latitude: float,
+    longitude: float,
+    category: str | None = None,
+) -> AuthorityContact:
+    """Which body owns the problem, and how to reach them.
+
+    Matched on the coordinates rather than `locality`, which is a free-text
+    string the client supplies and nothing validates. Overlapping boxes
+    resolve to the smallest, so a city sitting inside a state-wide row is the
+    one that gets the letter.
+
+    With a category, a departmental desk is preferred over the front door: a
+    pothole reaches the roads engineer rather than a general inbox, which is
+    the difference between a complaint that is routed and one that is
+    forwarded.
+
+    Falls back to AUTHORITY_EMAIL, which is what a deployment that has not
+    seeded the table still has.
+    """
+    row = await authority_row_for(session, latitude, longitude)
+    if row is None:
+        return settings_contact()
+
+    desk = None
+    if category:
+        desk = await session.scalar(
+            select(AuthorityContactPoint).where(
+                AuthorityContactPoint.authority_id == row.id,
+                AuthorityContactPoint.kind == ContactPointKind.DEPARTMENT,
+                AuthorityContactPoint.key == category,
+                AuthorityContactPoint.active.is_(True),
+            )
+        )
+    return contact_from(row, desk)
+
+
+async def authority_row_for(
+    session: AsyncSession, latitude: float, longitude: float
+) -> Authority | None:
+    """The body whose box covers this point, smallest first."""
+    rows = (
+        await session.scalars(
+            select(Authority).where(
+                Authority.active.is_(True),
+                Authority.min_latitude <= latitude,
+                Authority.max_latitude >= latitude,
+                Authority.min_longitude <= longitude,
+                Authority.max_longitude >= longitude,
+            )
+        )
+    ).all()
+    return min(rows, key=lambda a: a.area) if rows else None
+
+
+async def desks_for(
+    session: AsyncSession, authority_id: str, kind: ContactPointKind
+) -> list[AuthorityContactPoint]:
+    return list(
+        (
+            await session.scalars(
+                select(AuthorityContactPoint).where(
+                    AuthorityContactPoint.authority_id == authority_id,
+                    AuthorityContactPoint.kind == kind,
+                    AuthorityContactPoint.active.is_(True),
+                )
+                # Stable, so the catalogue the model is shown does not reorder
+                # between runs for no reason.
+                .order_by(AuthorityContactPoint.key)
+            )
+        ).all()
+    )
+
+
+def contact_from(
+    row: Authority, desk: AuthorityContactPoint | None
+) -> AuthorityContact:
+    """The body's name still goes on the letter; the desk is who opens it.
+
+    "To the Chief Engineer (Roads)" from a resident would be odd, and the
+    corporation is the one answerable for the road either way.
+    """
+    return AuthorityContact(
+        name=row.name,
+        email=desk.email if desk else row.email,
+        channel=ContactChannel.EMAIL if desk else row.channel,
+        portal_url=row.portal_url,
+        helpline=row.helpline,
     )
 
 
@@ -229,15 +332,24 @@ class EmailAuthorityChannel(AuthorityChannel):
 
     name = "email"
 
-    def __init__(self, reply_token: str) -> None:
+    def __init__(self, reply_token: str, contact: AuthorityContact) -> None:
         self.reply_token = reply_token
+        # Resolved by the caller, which is where the session lives. Passing it
+        # in also means the row is read once per letter rather than twice.
+        self.contact = contact
         self.message_id: str | None = None
 
     async def send(self, subject: str, body: str, request: ConcernRequest) -> str | None:
         settings = get_settings()
-        contact = authority_for(request.locality)
-        if not contact.email:
-            log.warning("no authority email configured; not sending")
+        contact = self.contact
+        if not contact.reachable_by_email:
+            # A portal-only body is not a misconfiguration, so this is not a
+            # warning: there is simply no inbox to write to yet.
+            log.info(
+                "%s has no complaint address (%s); not sending",
+                contact.name,
+                contact.channel.value,
+            )
             return None
 
         self.message_id = build_message_id(settings)

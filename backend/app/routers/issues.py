@@ -14,12 +14,13 @@ from fastapi import (
 
 from .. import service
 from ..config import get_settings
-from ..cursor import InvalidCursor, NearbyCursor, TimeCursor
+from ..cursor import FeedCursor, InvalidCursor, NearbyCursor, TimeCursor
 from ..deps import CurrentUser, OptionalUser, SessionDep
 from ..enums import Category, Severity, Status
 from ..geo import within_geofence
 from ..images import ImageRejected, ProcessedImage, process_jpeg
 from ..schemas import (
+    FeedPage,
     EscalationOut,
     DuplicatesOut,
     FixDateIn,
@@ -41,6 +42,39 @@ NOT_FOUND = HTTPException(
 
 def _unprocessable(detail: str) -> HTTPException:
     return HTTPException(status_code=422, detail=detail)
+
+
+@router.get("/feed", response_model=FeedPage)
+async def feed(
+    session: SessionDep,
+    viewer: OptionalUser,
+    lat: Annotated[float, Query(ge=-90, le=90)],
+    lng: Annotated[float, Query(ge=-180, le=180)],
+    cursor: str | None = None,
+    limit: int | None = None,
+) -> FeedPage:
+    """The home feed. Ranked by proximity, freshness and backing, and widened
+    until it has something, so nobody opens the app to nothing."""
+    settings = get_settings()
+    requested = settings.default_limit if limit is None else limit
+    page_size = max(1, min(requested, settings.max_limit))
+
+    parsed: FeedCursor | None = None
+    if cursor:
+        try:
+            parsed = FeedCursor.decode(cursor)
+        except InvalidCursor as exc:
+            raise _unprocessable(str(exc)) from exc
+
+    return await service.feed(
+        session,
+        viewer=viewer,
+        store=get_store(),
+        latitude=lat,
+        longitude=lng,
+        cursor=parsed,
+        limit=page_size,
+    )
 
 
 @router.get("/nearby", response_model=Page)

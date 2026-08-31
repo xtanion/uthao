@@ -2,6 +2,7 @@ import uuid
 from datetime import date, datetime, time, timezone
 
 from sqlalchemy import (
+    Boolean,
     Date,
     DateTime,
     Enum,
@@ -19,6 +20,8 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from .enums import (
     ActivityType,
     Category,
+    ContactChannel,
+    ContactPointKind,
     EscalationState,
     MessageDirection,
     Severity,
@@ -316,6 +319,11 @@ class Escalation(Base):
     message_id: Mapped[str | None] = mapped_column(String(300), default=None)
     subject: Mapped[str] = mapped_column(String(300))
     body: Mapped[str] = mapped_column(Text)
+    # What the letter was routed as, and to which desk. Kept because the
+    # recipient alone does not say why: an address that turns out to be wrong
+    # is worth being able to trace back to the decision that chose it.
+    routed_category: Mapped[str | None] = mapped_column(String(40), default=None)
+    routed_desk: Mapped[str | None] = mapped_column(String(160), default=None)
     state: Mapped[EscalationState] = mapped_column(
         _enum(EscalationState), default=EscalationState.DRAFTED
     )
@@ -441,4 +449,110 @@ class OtpRequestLog(Base):
     ip: Mapped[str] = mapped_column(String(64))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, index=True
+    )
+
+
+class Authority(Base):
+    """A body a complaint can be raised with, and how to reach it.
+
+    In the database rather than settings because these change: a corporation
+    replaces a grievance address, a state reorganises a corporation, a portal
+    moves. Editing a row beats a redeploy, and `source_url` with `verified_at`
+    is what lets somebody re-check one a year from now.
+    """
+
+    __tablename__ = "authorities"
+    __table_args__ = (
+        Index("ix_authorities_box", "min_latitude", "max_latitude"),
+    )
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    slug: Mapped[str] = mapped_column(String(64), unique=True)
+    # Goes on the letter, after "To the". Written out rather than initialised
+    # because a municipal office should not have to expand an acronym.
+    name: Mapped[str] = mapped_column(String(160))
+    city: Mapped[str] = mapped_column(String(80))
+    state: Mapped[str] = mapped_column(String(80))
+
+    # What can actually be done with this row today. EMAIL is the only one the
+    # escalate job can act on; the others exist so the app can still tell
+    # somebody where to go, and so a portal integration has somewhere to land.
+    channel: Mapped[ContactChannel] = mapped_column(
+        _enum(ContactChannel), default=ContactChannel.NONE
+    )
+    email: Mapped[str | None] = mapped_column(String(320), default=None)
+    portal_url: Mapped[str | None] = mapped_column(String(500), default=None)
+    helpline: Mapped[str | None] = mapped_column(String(40), default=None)
+
+    # A box, matching the geofence. Ward polygons are the real answer and this
+    # is not pretending otherwise; it is enough to get a letter to the right
+    # corporation, which is the part currently done by one global address.
+    min_latitude: Mapped[float] = mapped_column(Float)
+    max_latitude: Mapped[float] = mapped_column(Float)
+    min_longitude: Mapped[float] = mapped_column(Float)
+    max_longitude: Mapped[float] = mapped_column(Float)
+
+    # Where the contact was read from, so the next person can check it rather
+    # than trusting a row somebody typed once.
+    source_url: Mapped[str | None] = mapped_column(String(500), default=None)
+    verified_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), default=None
+    )
+    # Turned off without losing the row, and without losing the escalations
+    # that already went to it.
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )
+
+    @property
+    def area(self) -> float:
+        """Smaller wins when boxes overlap, so a city inside a state-wide row
+        is the one that gets the letter."""
+        return (self.max_latitude - self.min_latitude) * (
+            self.max_longitude - self.min_longitude
+        )
+
+
+class AuthorityContactPoint(Base):
+    """A more specific desk inside an authority than its front door.
+
+    Two kinds, because a complaint is placed on two axes. DEPARTMENT routes by
+    what is broken - a pothole belongs to the roads engineer, not the solid
+    waste one. WARD routes by where it is, which is the better destination of
+    the two and the one that cannot be used yet: it needs ward geometry, and
+    the boxes on `Authority` are city-sized. Ward rows are carried inactive so
+    the addresses are not lost between now and then.
+    """
+
+    __tablename__ = "authority_contact_points"
+    __table_args__ = (
+        UniqueConstraint("authority_id", "kind", "key", name="uq_contact_point"),
+    )
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    # No index of its own: the unique constraint below leads with this column.
+    authority_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("authorities.id", ondelete="CASCADE")
+    )
+    kind: Mapped[ContactPointKind] = mapped_column(_enum(ContactPointKind))
+    # A Category value for a department, a ward code for a ward.
+    key: Mapped[str] = mapped_column(String(40))
+    name: Mapped[str] = mapped_column(String(160))
+    email: Mapped[str] = mapped_column(String(320))
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+    source_url: Mapped[str | None] = mapped_column(String(500), default=None)
+    verified_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), default=None
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
     )

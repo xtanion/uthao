@@ -27,12 +27,12 @@ from .authority import (
     AuthorityUpdate,
     ConcernRequest,
     EmailAuthorityChannel,
-    authority_for,
     get_channel,
     get_drafter,
     subject_for,
 )
 from .mail import Attachment, new_reply_token
+from .routing import route_report
 from .config import get_settings
 from .db import dispose, sessionmaker
 from .enums import (
@@ -195,12 +195,31 @@ async def escalate_confirmed(limit: int | None = None) -> Report:
 
         for issue in candidates:
             report.considered += 1
-            contact = authority_for(issue.locality)
+            routing = await route_report(
+                session,
+                title=issue.title,
+                description=issue.description,
+                category=issue.category,
+                latitude=issue.latitude,
+                longitude=issue.longitude,
+            )
+            contact = routing.contact
             claim = await _claim(session, issue, contact.name)
             if claim is None:
                 report.skipped += 1
                 continue
             claim.recipient = contact.email
+            claim.routed_category = routing.category.value
+            claim.routed_desk = routing.desk
+            if routing.reclassified:
+                # The reporter's category is left alone: it is what they chose
+                # and what the app shows. Only the letter is routed on this.
+                log.info(
+                    "issue %s reported as %s, routed as %s",
+                    issue.id,
+                    issue.category.value,
+                    routing.category.value,
+                )
 
             reporter = await session.get(User, issue.reporter_id)
             confirmed = aware(issue.confirmed_at)
@@ -242,7 +261,7 @@ async def escalate_confirmed(limit: int | None = None) -> Report:
             # A channel set explicitly (a test, or a future portal adapter)
             # wins; otherwise each report gets an email channel bound to its own
             # reply address.
-            post = channel or EmailAuthorityChannel(claim.reply_token)
+            post = channel or EmailAuthorityChannel(claim.reply_token, contact)
             try:
                 reference = await post.send(claim.subject, body, request)
             except Exception as exc:

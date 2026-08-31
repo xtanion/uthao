@@ -97,6 +97,43 @@ municipal body is the wrong kind of mistake to make quietly. The jobs are safe
 to run repeatedly and safe to interrupt: each report is claimed by an insert
 that a unique constraint arbitrates, so two overlapping runs cannot both send.
 
+## Where a complaint is sent
+
+Three steps, each falling back to the one before it, so every one of them can
+be off and a letter still goes somewhere defensible.
+
+**Which body.** `authorities` holds a row per corporation with a lat/lng box,
+matched on the report's coordinates rather than its `locality`, which is
+free text the client supplies and nothing validates. Overlapping boxes resolve
+to the smallest, so a city inside a state-wide row wins. Nothing matches and
+it is `AUTHORITY_EMAIL`, which is what a deployment with an empty table has.
+
+**What it is, and whose desk.** `app/routing.py` asks the model to do both at
+once, because they are the same reasoning. It is shown the report and a
+catalogue of the desks this body actually has - keys and names, never
+addresses - and returns a category and a desk key. Anything it returns that is
+not in the catalogue is discarded, which is what a hallucinated address looks
+like by the time it reaches the parser. **The model cannot produce an email
+address**: the address is read from the row it picked.
+
+The reporter's own category is left alone. It is what they chose and what the
+app shows them; only the letter is routed on the model's answer, and both are
+recorded on the escalation.
+
+**The address.** `authority_contact_points` holds departmental desks keyed on
+category, and the 24 BMC ward offices. Departments are live. Wards are not:
+an assistant commissioner is the better destination than a citywide chief
+engineer, and choosing between them needs ward geometry rather than a
+city-sized box, so they are carried inactive until it lands.
+
+`AI_ROUTING=false` turns the model off and leaves the static
+category-to-department mapping doing the work. No `ANTHROPIC_API_KEY` does the
+same thing.
+
+```bash
+uv run python scripts/seed_authorities.py
+```
+
 ## Deploying
 
 Fly, `bom` (Mumbai). `fly.toml` is in this directory and the Dockerfile is used
@@ -224,6 +261,32 @@ geofenced — only reports are.
 a `Support` that happens to carry words. `comment_count` counts supports with a
 body, `confirmation_count` counts supports from anyone but the reporter. See
 **Supports** below for why.
+
+**Signing in.** Two doors onto the same account, because the phone number is
+the identity on both.
+
+`POST /auth/otp/verify` is the original: we generate the code, store a hashed
+challenge, rate limit it, and send it. It needs an SMS provider, which in India
+needs a DLT registration - an entity, a header, and every template pre-approved
+with the operators. Weeks, and only Indian entities may register.
+
+`POST /auth/firebase` takes an ID token from Firebase instead. Google sends the
+SMS and holds the registration, so nothing here registers a sender. The token
+is verified with `google.oauth2.id_token` - Google's own code rather than a
+hand-rolled JWT check - and then `otp.upsert_user` runs, exactly as the OTP
+path does. Somebody who signed in by OTP last month and by Firebase today is
+one account, not two, and `tests/test_firebase_auth.py` pins that.
+
+Three things google-auth does not do, so `firebase.py` does them: it checks the
+audience but **not the issuer**, so a token from another Firebase project would
+otherwise pass; it does not care which provider signed the user in, so a
+project with anonymous or email sign-in enabled could mint a token with no
+phone number; and it is synchronous and fetches Google's signing certificates,
+so the call goes to a worker thread with a kept connection pool.
+
+`google-auth` over `firebase-admin`: 6 packages against 34, for one function.
+The urllib3 transport rather than the requests one, because botocore already
+brings urllib3.
 
 **3. Refresh tokens.** The app now uses them. It stores both halves and retries
 a `401` once behind a single-flight refresh, so shortening

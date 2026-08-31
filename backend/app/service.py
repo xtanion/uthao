@@ -1,12 +1,12 @@
 import logging
 from datetime import date, datetime, time, timedelta, timezone
 
-from sqlalchemy import and_, delete, func, or_, select, update
+from sqlalchemy import and_, case, delete, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .config import get_settings
-from .cursor import NearbyCursor, TimeCursor
+from .cursor import FeedCursor, NearbyCursor, TimeCursor
 from .enums import CLOSED_STATUSES, HIDDEN_STATUSES, ActivityType, Category, Severity, Status
 from .geo import bounding_box, distance_m, squared_distance_m
 from .images import ProcessedImage
@@ -25,6 +25,7 @@ from .models import (
     utcnow,
 )
 from .schemas import (
+    FeedPage,
     ContributionsOut,
     DuplicateOut,
     DuplicatesOut,
@@ -294,6 +295,133 @@ async def check_write_budget(session: AsyncSession, user: User, *, kind: str) ->
         raise TooManyWrites(
             f"That is {allowed} {noun} in an hour. Give it a little while."
         )
+
+
+def _feed_score(latitude: float, longitude: float, pinned: datetime):
+    """How worth showing a report is, as one number.
+
+    Three pulls, all expressed in arithmetic and CASE so the same expression
+    runs on SQLite and PostgreSQL: no date functions, no least(), nothing a
+    dialect has an opinion about.
+
+    Proximity is a curve rather than a cutoff - a report 700 m away is worth
+    less than one at 200 m, not worthless. Freshness is bucketed because that
+    is how a person reads a feed: today, this week, or old news. Backing is
+    capped because the eighth photograph does not make a report twice as worth
+    seeing as the fourth.
+    """
+    settings = get_settings()
+    scale = settings.feed_near_scale_m * settings.feed_near_scale_m
+    near = scale / (scale + squared_distance_m(latitude, longitude))
+
+    fresh = case(
+        (Issue.created_at >= pinned - timedelta(days=2), 1.0),
+        (Issue.created_at >= pinned - timedelta(days=7), 0.65),
+        (Issue.created_at >= pinned - timedelta(days=30), 0.35),
+        else_=0.15,
+    )
+
+    cap = settings.feed_backing_cap
+    backed = case(
+        (Issue.photo_support_count >= cap, 1.0),
+        else_=Issue.photo_support_count / float(cap),
+    )
+
+    return (
+        settings.feed_weight_near * near
+        + settings.feed_weight_fresh * fresh
+        + settings.feed_weight_backed * backed
+    )
+
+
+async def feed(
+    session: AsyncSession,
+    *,
+    viewer: User | None,
+    store: ObjectStore,
+    latitude: float,
+    longitude: float,
+    cursor: FeedCursor | None,
+    limit: int,
+) -> FeedPage:
+    """The home feed: ranked, and widened until it has something to show.
+
+    A blank home screen is the worst thing this app can do to somebody who has
+    just installed it, and the honest reason for one is almost always that they
+    are standing somewhere quiet rather than that nothing is wrong anywhere. So
+    the radius climbs a ladder until the page fills, and the response says how
+    far it had to reach so the app can be straight about it.
+    """
+    settings = get_settings()
+    pinned = (
+        TimeCursor.parse(cursor.pinned_at) if cursor else datetime.now(timezone.utc)
+    )
+    score = _feed_score(latitude, longitude, pinned)
+    distance = squared_distance_m(latitude, longitude)
+
+    rungs = [r for r in settings.feed_radius_ladder_m if r <= settings.max_radius_m]
+    if cursor is not None:
+        # Later pages stay on the ring the first page settled on, or the feed
+        # would widen mid-scroll and repeat what it had already shown.
+        rungs = [cursor.radius_m]
+
+    rows: list = []
+    used = rungs[-1] if rungs else settings.default_radius_m
+    # 0 is the last rung and means no distance filter at all. Somebody far from
+    # anywhere anyone has reported still gets a screen with something on it,
+    # and `radius_m: null` is how the app knows to say where it came from.
+    for radius in [*rungs, 0.0]:
+        statement = select(Issue, score.label("score")).where(
+            Issue.status.not_in(list(HIDDEN_STATUSES)),
+        )
+        if radius:
+            min_lat, max_lat, min_lng, max_lng = bounding_box(
+                latitude, longitude, radius
+            )
+            statement = statement.where(
+                Issue.latitude.between(min_lat, max_lat),
+                Issue.longitude.between(min_lng, max_lng),
+                distance <= radius * radius,
+            )
+        if cursor is not None:
+            statement = statement.where(
+                or_(
+                    score < cursor.score,
+                    and_(score == cursor.score, Issue.id > cursor.issue_id),
+                )
+            )
+        statement = statement.order_by(score.desc(), Issue.id.asc()).limit(limit + 1)
+        rows = (await session.execute(statement)).all()
+        used = radius
+        # limit + 1 is fetched to detect a next page, so enough to fill this
+        # one is len >= limit. Requiring more than that would widen past a
+        # ring that was already exactly full.
+        if len(rows) >= limit:
+            break
+
+    has_more = len(rows) > limit
+    rows = rows[:limit]
+
+    issues = [row[0] for row in rows]
+    confirmed = await _confirmed_issue_ids(session, viewer, [i.id for i in issues])
+    items = [_to_out(issue, issue.id in confirmed, store) for issue in issues]
+
+    next_cursor = None
+    if has_more and rows:
+        last_issue, last_score = rows[-1]
+        next_cursor = FeedCursor(
+            score=float(last_score),
+            issue_id=last_issue.id,
+            pinned_at=TimeCursor.moment(pinned),
+            radius_m=used,
+        ).encode()
+
+    return FeedPage(
+        items=items,
+        next_cursor=next_cursor,
+        radius_m=used or None,
+        widened=used == 0.0 or used > settings.feed_radius_ladder_m[0],
+    )
 
 
 async def create_issue(

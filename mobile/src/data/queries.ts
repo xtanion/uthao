@@ -16,6 +16,24 @@ export function useNearbyFeed(point: GeoPoint) {
   });
 }
 
+/** The home feed. Ranked server-side, and never empty when anything exists. */
+export function useFeed(point: GeoPoint) {
+  const { issues } = useServices();
+  return useInfiniteQuery({
+    queryKey: ['feed', point.latitude, point.longitude],
+    initialPageParam: null as string | null,
+    queryFn: ({ pageParam }) => issues.feed(point, pageParam),
+    getNextPageParam: (last) => last.next_cursor,
+    // The feed does not refresh under somebody who is reading it. Reordering a
+    // list while a person is halfway down it loses their place and can swap
+    // the card out from under a tap, and none of the reasons to refetch are
+    // worth that. It reloads when they ask for it: a pull, their own support
+    // or report, or coming back to a screen that had been left.
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+  });
+}
+
 export function useMapIssues(point: GeoPoint) {
   const { issues } = useServices();
   return useQuery({
@@ -43,6 +61,7 @@ export function useConfirm() {
     onSuccess: (updated) => {
       client.setQueryData(['issue', updated.id], updated);
       client.invalidateQueries({ queryKey: ['nearby'] });
+      client.invalidateQueries({ queryKey: ['feed'] });
       client.invalidateQueries({ queryKey: ['search'] });
       client.invalidateQueries({ queryKey: ['mine'] });
       // A confirmation moves both profiles: the reporter's score and the
@@ -84,6 +103,7 @@ export function useSupport(issueId: string) {
         client.invalidateQueries({ queryKey: key });
       }
       client.invalidateQueries({ queryKey: ['nearby'] });
+      client.invalidateQueries({ queryKey: ['feed'] });
     },
   });
 }
@@ -101,6 +121,7 @@ export function useWithdrawSupport(issueId: string) {
         client.invalidateQueries({ queryKey: key });
       }
       client.invalidateQueries({ queryKey: ['nearby'] });
+      client.invalidateQueries({ queryKey: ['feed'] });
       client.invalidateQueries({ queryKey: ['mine'] });
     },
   });

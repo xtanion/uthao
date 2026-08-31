@@ -19,6 +19,7 @@ import type {
   IssuesRepository,
   NearbyQuery,
   NotificationsRepository,
+  FeedPage,
   Page,
   UsersRepository,
 } from './repository';
@@ -68,6 +69,12 @@ export class ApiIssuesRepository implements IssuesRepository {
       if (error instanceof ApiError && error.status === 404) return null;
       throw error;
     }
+  }
+
+  feed(point: GeoPoint, cursor?: string | null) {
+    return request<FeedPage>('/issues/feed', {
+      query: { lat: point.latitude, lng: point.longitude, cursor, limit: PAGE_SIZE },
+    });
   }
 
   mine(cursor?: string | null) {
