@@ -1,6 +1,6 @@
 import uuid
 
-from tests.conftest import auth, create_issue, jpeg_bytes, sign_in
+from tests.conftest import HERE, auth, create_issue, jpeg_bytes, sign_in
 
 REPORTER = "+919876543210"
 OTHERS = ["+919876500001", "+919876500002", "+919876500003"]
@@ -19,7 +19,7 @@ async def support(client, token, issue_id, with_photo: bool):
     return await client.post(
         f"/issues/{issue_id}/supports",
         headers=auth(token),
-        data={"body": "Saw this too."},
+        data={"body": "Saw this too.", **HERE},
         files=files,
     )
 

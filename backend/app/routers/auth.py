@@ -55,7 +55,9 @@ async def refresh(body: RefreshIn, session: SessionDep) -> TokenOut:
             status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)
         ) from exc
     user = await session.get(User, user_id)
-    if user is None:
+    # A closed account keeps its row, so existing is not enough: without the
+    # deleted check its refresh token would mint access tokens indefinitely.
+    if user is None or user.is_deleted:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Your session has expired. Sign in again.",

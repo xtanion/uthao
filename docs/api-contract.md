@@ -297,15 +297,22 @@ Authenticated. **`multipart/form-data`**, because photos travel with it.
 |---|---|---|
 | `body` | string | optional, <= 2000 chars |
 | `photos` | file[] | optional, JPEG, at most `MAX_PHOTOS_PER_REPORT` |
+| `latitude`, `longitude` | float | where the phone is; required with `photos` |
 
 → `200` the updated Issue
 → `403` a bare support (no body, no photos) on your own report
 → `404` if the issue is gone, `422` on an unusable photo or an overlong body
+→ `422` photos with no location, or from further than `SUPPORT_RADIUS_M` (150)
+  from the report
 
 Supporting twice updates the row and adds to it rather than failing — that is
 what someone adding a photo to something they already backed expects. The
 reporter may support their own issue to post a follow-up; it does not count
 toward `confirmation_count`.
+
+Photos count because they are taken where the problem is, so a support that
+carries any must say where it was sent from. Words and a bare support need no
+location: neither moves the status. The location is checked, not stored.
 
 ### `DELETE /issues/{id}/supports`
 

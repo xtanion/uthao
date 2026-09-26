@@ -6,7 +6,7 @@ import pytest
 from sqlalchemy import select
 
 from app.jobs import prune_otp
-from tests.conftest import auth, create_issue, jpeg_bytes, sign_in
+from tests.conftest import HERE, auth, create_issue, jpeg_bytes, sign_in
 
 REPORTER = "+919876543210"
 NEIGHBOUR = "+919876500001"
@@ -21,7 +21,7 @@ async def photo_support(client, token, issue_id, body=""):
     return await client.post(
         f"/issues/{issue_id}/supports",
         headers=auth(token),
-        data={"body": body},
+        data={"body": body, **HERE},
         files=[("photos", ("p.jpg", jpeg_bytes(320, 240), "image/jpeg"))],
     )
 
@@ -48,6 +48,21 @@ async def test_deleting_an_account_ends_the_session(client, sender):
 
     # The token is still cryptographically valid for another 30 days.
     assert (await client.get("/me", headers=auth(token))).status_code == 401
+
+
+async def test_a_deleted_account_cannot_refresh_its_way_back_in(client, sender):
+    await client.post("/auth/otp/request", json={"phone": REPORTER})
+    verified = await client.post(
+        "/auth/otp/verify", json={"phone": REPORTER, "code": sender.codes[REPORTER]}
+    )
+    tokens = verified.json()
+    await client.delete("/me", headers=auth(tokens["access_token"]))
+
+    response = await client.post(
+        "/auth/token/refresh", json={"refresh_token": tokens["refresh_token"]}
+    )
+
+    assert response.status_code == 401
 
 
 async def test_the_phone_number_is_gone_and_reusable(client, sender):

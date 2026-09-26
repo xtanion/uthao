@@ -61,6 +61,17 @@ async def record_reply(session: AsyncSession, mail: InboundMail) -> Escalation |
         log.warning("inbound mail for an unknown address: %s", mail.to)
         return None
 
+    # Providers retry, and a signed post can be replayed inside the signing
+    # window. The same email twice is still one reply, and must not notify the
+    # reporter or move the report a second time.
+    if mail.message_id and await session.scalar(
+        select(EscalationMessage.id).where(
+            EscalationMessage.escalation_id == escalation.id,
+            EscalationMessage.message_id == mail.message_id,
+        )
+    ):
+        return escalation
+
     session.add(
         EscalationMessage(
             escalation_id=escalation.id,

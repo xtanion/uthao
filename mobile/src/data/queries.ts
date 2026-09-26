@@ -74,10 +74,18 @@ export function useGallery(issueId: string) {
 /** Adding words or a photo changes the issue, the thread, and the gallery, so
  *  all three are refreshed rather than patched. */
 export function useSupport(issueId: string) {
-  const { issues } = useServices();
+  const { issues, location } = useServices();
   const client = useQueryClient();
   return useMutation({
-    mutationFn: (draft: SupportDraft) => issues.support(issueId, draft),
+    // Photos only count from where the problem is, so they go with a fresh fix
+    // rather than wherever the app was when it opened. Words go without.
+    mutationFn: async (draft: SupportDraft) =>
+      issues.support(
+        issueId,
+        draft.photos.length && !draft.location
+          ? { ...draft, location: await location.current() }
+          : draft,
+      ),
     onSuccess: (updated) => {
       client.setQueryData(['issue', updated.id], updated);
       for (const key of [['supports', issueId], ['gallery', issueId], ['issue', issueId]]) {

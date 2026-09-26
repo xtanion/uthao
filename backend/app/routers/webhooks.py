@@ -1,5 +1,6 @@
 import hashlib
 import hmac
+import time
 from typing import Annotated
 
 from fastapi import APIRouter, Header, HTTPException, Request, status
@@ -28,22 +29,42 @@ class DeliveryIn(BaseModel):
     detail: str | None = Field(default=None, max_length=2000)
 
 
-async def _verified(request: Request, signature: str | None) -> bytes:
+async def _verified(
+    request: Request, signature: str | None, timestamp: str | None
+) -> bytes:
     """The reply address is unguessable, but this endpoint is not: without a
     signature anyone who learned an address could post a fake resolution and
-    close a real problem."""
-    secret = get_settings().inbound_mail_secret
+    close a real problem.
+
+    The signature covers when the request was sent as well as what it says,
+    and anything older than the tolerance is refused. Signing the body alone
+    left a captured request valid forever: a bounce replayed next month would
+    still send a report backwards.
+    """
+    settings = get_settings()
+    secret = settings.inbound_mail_secret
     if not secret:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Inbound mail is not configured.",
         )
     raw = await request.body()
-    expected = hmac.new(secret.encode(), raw, hashlib.sha256).hexdigest()
-    if not signature or not hmac.compare_digest(expected, signature):
+    if not signature or not timestamp or not timestamp.isdigit():
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="That signature does not match.",
+        )
+    signed = timestamp.encode() + b"." + raw
+    expected = hmac.new(secret.encode(), signed, hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(expected, signature):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="That signature does not match.",
+        )
+    if abs(time.time() - int(timestamp)) > settings.webhook_tolerance_seconds:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="That request is too old to accept.",
         )
     return raw
 
@@ -54,8 +75,9 @@ async def inbound_mail(
     session: SessionDep,
     body: InboundMailIn,
     x_fihy_signature: Annotated[str | None, Header()] = None,
+    x_fihy_timestamp: Annotated[str | None, Header()] = None,
 ) -> None:
-    await _verified(request, x_fihy_signature)
+    await _verified(request, x_fihy_signature, x_fihy_timestamp)
     await inbound.record_reply(
         session,
         inbound.InboundMail(
@@ -74,8 +96,9 @@ async def mail_events(
     session: SessionDep,
     body: DeliveryIn,
     x_fihy_signature: Annotated[str | None, Header()] = None,
+    x_fihy_timestamp: Annotated[str | None, Header()] = None,
 ) -> None:
-    await _verified(request, x_fihy_signature)
+    await _verified(request, x_fihy_signature, x_fihy_timestamp)
     await inbound.record_delivery(
         session,
         inbound.Delivery(to=body.to, delivered=body.delivered, detail=body.detail),

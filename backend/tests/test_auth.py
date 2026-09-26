@@ -1,7 +1,23 @@
+import pytest
+
 from app.config import get_settings
 from tests.conftest import auth, sign_in
 
 PHONE = "+919876543210"
+
+
+@pytest.fixture
+def env(monkeypatch):
+    """Settings are cached, so an override has to clear the cache both ways."""
+
+    def override(**values: str) -> None:
+        for key, value in values.items():
+            monkeypatch.setenv(key, value)
+        get_settings.cache_clear()
+
+    yield override
+    monkeypatch.undo()
+    get_settings.cache_clear()
 
 
 async def test_requesting_a_code_returns_204_and_sends_it(client, sender):
@@ -85,6 +101,40 @@ async def test_requests_are_rate_limited_per_phone(client, sender):
     response = await client.post("/auth/otp/request", json={"phone": PHONE})
     assert response.status_code == 429
     assert "hour" in response.json()["detail"]
+
+
+async def test_a_forwarded_header_does_not_dodge_the_ip_limit(client, sender, env):
+    """Changing X-Forwarded-For or CF-Connecting-IP per request used to reset
+    the count, and every request that got through was an SMS."""
+    env(OTP_REQUESTS_PER_IP_PER_HOUR="3")
+
+    statuses = []
+    for n in range(4):
+        response = await client.post(
+            "/auth/otp/request",
+            json={"phone": f"+9198765000{n:02d}"},
+            headers={
+                "X-Forwarded-For": f"203.0.113.{n}",
+                "CF-Connecting-IP": f"198.51.100.{n}",
+            },
+        )
+        statuses.append(response.status_code)
+
+    assert statuses == [204, 204, 204, 429]
+
+
+async def test_the_configured_proxy_header_is_believed(client, sender, env):
+    env(OTP_REQUESTS_PER_IP_PER_HOUR="1", CLIENT_IP_HEADER="fly-client-ip")
+
+    async def ask(phone: str, ip: str) -> int:
+        response = await client.post(
+            "/auth/otp/request", json={"phone": phone}, headers={"Fly-Client-IP": ip}
+        )
+        return response.status_code
+
+    assert await ask("+919876500010", "203.0.113.7") == 204
+    assert await ask("+919876500011", "203.0.113.8") == 204, "another caller, another count"
+    assert await ask("+919876500012", "203.0.113.7") == 429
 
 
 async def test_a_malformed_phone_is_rejected_with_one_sentence(client):

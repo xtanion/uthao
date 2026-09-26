@@ -12,7 +12,7 @@ from app import authority as authority_module
 from app.authority import AuthorityChannel, AuthorityUpdate, ConcernDrafter, ConcernRequest
 from app.enums import EscalationState, Status
 from app.jobs import check_submitted, escalate_confirmed
-from tests.conftest import auth, create_issue, jpeg_bytes, sign_in
+from tests.conftest import HERE, auth, create_issue, jpeg_bytes, sign_in
 
 REPORTER = "+919876543210"
 NEIGHBOUR = "+919876500001"
@@ -84,7 +84,7 @@ async def confirmed_issue(client, sender, phones=(NEIGHBOUR, THIRD)) -> str:
         await client.post(
             f"/issues/{issue_id}/supports",
             headers=auth(token),
-            data={"body": f"Still open, {phone}."},
+            data={"body": f"Still open, {phone}.", **HERE},
             files=[("photos", ("p.jpg", jpeg_bytes(320, 240), "image/jpeg"))],
         )
     return issue_id
@@ -281,7 +281,7 @@ async def test_the_batch_is_capped(client, sender, wired):
             await client.post(
                 f"/issues/{issue_id}/supports",
                 headers=auth(token),
-                data={"body": ""},
+                data={"body": "", **HERE},
                 files=[("photos", ("p.jpg", jpeg_bytes(320, 240), "image/jpeg"))],
             )
 

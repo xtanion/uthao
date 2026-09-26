@@ -2,6 +2,7 @@
 import hashlib
 import hmac
 import json
+import time
 import uuid
 
 import pytest
@@ -13,7 +14,7 @@ from app.authority import AuthorityUpdate, ConcernRequest, ConcernDrafter, Reply
 from app.enums import EscalationState, MessageDirection, Status
 from app.jobs import escalate_confirmed
 from app.mail import MailTransport, OutboundEmail, compose, token_from_address
-from tests.conftest import auth, create_issue, jpeg_bytes, sign_in
+from tests.conftest import HERE, auth, create_issue, jpeg_bytes, sign_in
 
 REPORTER = "+919876543210"
 NEIGHBOUR = "+919876500001"
@@ -87,7 +88,7 @@ async def confirmed_issue(client, sender) -> str:
         await client.post(
             f"/issues/{issue_id}/supports",
             headers=auth(token),
-            data={"body": f"Still open, {phone}."},
+            data={"body": f"Still open, {phone}.", **HERE},
             files=[("photos", ("p.jpg", jpeg_bytes(320, 240), "image/jpeg"))],
         )
     return issue_id
@@ -111,10 +112,17 @@ async def status_of(issue_id):
         return (await session.scalar(select(Issue).where(Issue.id == issue_id))).status
 
 
-def signed(payload: dict) -> tuple[bytes, dict]:
+def signed(payload: dict, at: float | None = None) -> tuple[bytes, dict]:
     raw = json.dumps(payload).encode()
-    signature = hmac.new(SECRET.encode(), raw, hashlib.sha256).hexdigest()
-    return raw, {"content-type": "application/json", "x-fihy-signature": signature}
+    timestamp = str(int(time.time() if at is None else at))
+    signature = hmac.new(
+        SECRET.encode(), timestamp.encode() + b"." + raw, hashlib.sha256
+    ).hexdigest()
+    return raw, {
+        "content-type": "application/json",
+        "x-fihy-signature": signature,
+        "x-fihy-timestamp": timestamp,
+    }
 
 
 # --- outbound --------------------------------------------------------------
@@ -366,6 +374,68 @@ async def test_a_wrongly_signed_post_is_refused(client, sender, posted):
     )
 
     assert response.status_code == 401
+
+
+async def test_an_old_post_cannot_be_replayed(client, sender, posted):
+    """A bounce captured once used to stay valid forever, and replaying it
+    sent a report that had reached BMC back to community_verified."""
+    transport, _ = posted
+    issue_id = await confirmed_issue(client, sender)
+    await escalate_confirmed()
+    raw, headers = signed(
+        {"to": transport.sent[0].reply_to, "delivered": False},
+        at=time.time() - 3600,
+    )
+
+    response = await client.post("/webhooks/mail-events", content=raw, headers=headers)
+
+    assert response.status_code == 401
+    assert await status_of(issue_id) == Status.SUBMITTED_TO_AUTHORITY
+
+
+async def test_a_captured_post_cannot_be_redated(client, sender, posted):
+    """The time is inside the signature, so freshening the header breaks it."""
+    transport, _ = posted
+    issue_id = await confirmed_issue(client, sender)
+    await escalate_confirmed()
+    raw, headers = signed(
+        {"to": transport.sent[0].reply_to, "delivered": False},
+        at=time.time() - 3600,
+    )
+
+    response = await client.post(
+        "/webhooks/mail-events",
+        content=raw,
+        headers={**headers, "x-fihy-timestamp": str(int(time.time()))},
+    )
+
+    assert response.status_code == 401
+    assert await status_of(issue_id) == Status.SUBMITTED_TO_AUTHORITY
+
+
+async def test_the_same_reply_twice_is_one_reply(client, sender, posted):
+    transport, _ = posted
+    reporter = await sign_in(client, sender, REPORTER)
+    issue_id = await confirmed_issue(client, sender)
+    await escalate_confirmed()
+    raw, headers = signed({
+        "to": transport.sent[0].reply_to,
+        "sender": "ward@example.gov.in",
+        "subject": "Re: Civic complaint",
+        "body": "Noted.",
+        "message_id": "<8871@bmc.example.gov.in>",
+    })
+
+    for _ in range(2):
+        response = await client.post("/webhooks/inbound-mail", content=raw, headers=headers)
+        assert response.status_code == 204
+
+    escalation = await escalation_for(issue_id)
+    inbound = [m for m in escalation.messages if m.direction == MessageDirection.INBOUND]
+    assert len(inbound) == 1
+    feed = await client.get("/notifications", headers=auth(reporter))
+    kinds = [row["type"] for row in feed.json()["items"]]
+    assert kinds.count("authority_replied") == 1
 
 
 async def test_a_reply_to_an_unknown_address_is_ignored(client, sender, posted):

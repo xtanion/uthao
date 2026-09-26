@@ -1,3 +1,7 @@
+// Imported rather than left to the global: uploads send expo-file-system Files,
+// which only expo/fetch can serialise, and EXPO_PUBLIC_USE_RN_FETCH swaps the
+// global back to React Native's fetch without touching this import.
+import { fetch } from 'expo/fetch';
 import { ApiError } from './repository';
 
 const BASE = process.env.EXPO_PUBLIC_API_URL ?? 'http://127.0.0.1:8000';

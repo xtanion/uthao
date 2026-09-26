@@ -112,6 +112,9 @@ export type SupportPage = {
 export type SupportDraft = {
   body?: string;
   photos: string[];
+  /** Where the phone is. The server refuses photos without it, or from too far
+   *  from the report: they count because they are taken where it is. */
+  location?: GeoPoint;
 };
 
 export const roundedDistance = (metres: number): string =>

@@ -1,3 +1,4 @@
+import { File } from 'expo-file-system';
 import type {
   Category,
   Duplicate,
@@ -24,14 +25,12 @@ import type {
 } from './repository';
 import { DUPLICATE_RADIUS_M, PAGE_SIZE } from './repository';
 
+/** Expo installs expo/fetch as the global fetch, and it reads the bytes of a
+ *  File but refuses React Native's { uri, name, type } parts outright. */
+const photoPart = (uri: string) => new File(uri);
+
 const appendPhotos = (form: FormData, uris: string[]) => {
-  uris.forEach((uri, i) => {
-    form.append('photos', {
-      uri,
-      name: `photo_${i}.jpg`,
-      type: 'image/jpeg',
-    } as unknown as Blob);
-  });
+  uris.forEach((uri) => form.append('photos', photoPart(uri)));
 };
 
 export class ApiIssuesRepository implements IssuesRepository {
@@ -103,6 +102,10 @@ export class ApiIssuesRepository implements IssuesRepository {
     // Always sent, even empty: it is what makes the request a form.
     form.append('body', draft.body ?? '');
     appendPhotos(form, draft.photos);
+    if (draft.location) {
+      form.append('latitude', String(draft.location.latitude));
+      form.append('longitude', String(draft.location.longitude));
+    }
     return request<Issue>(`/issues/${id}/supports`, { method: 'POST', body: form });
   }
 
@@ -193,7 +196,7 @@ export class ApiUsersRepository implements UsersRepository {
 
   setAvatar(uri: string) {
     const form = new FormData();
-    form.append('photo', { uri, name: 'avatar.jpg', type: 'image/jpeg' } as unknown as Blob);
+    form.append('photo', photoPart(uri));
     return request<Account>('/me/avatar', { method: 'PUT', body: form });
   }
 

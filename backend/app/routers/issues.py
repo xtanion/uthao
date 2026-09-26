@@ -280,16 +280,22 @@ async def write_support(
     background: BackgroundTasks,
     body: Annotated[str | None, Form(max_length=2000)] = None,
     photos: Annotated[list[UploadFile] | None, File()] = None,
+    latitude: Annotated[float | None, Form(ge=-90, le=90)] = None,
+    longitude: Annotated[float | None, Form(ge=-180, le=180)] = None,
 ) -> IssueOut:
     """Back a report, optionally with words and photos.
 
     Multipart rather than JSON because photos travel with it. Supporting twice
     updates the row instead of failing, which is what someone adding a photo to
-    something they already backed expects.
+    something they already backed expects. Photos need the phone's location,
+    and it has to be near the report.
     """
     issue = await service.get_visible_issue(session, issue_id)
     if issue is None:
         raise NOT_FOUND
+    if (latitude is None) != (longitude is None):
+        raise _unprocessable("Send latitude and longitude together.")
+    location = None if latitude is None else (latitude, longitude)
 
     try:
         await service.check_write_budget(session, user, kind="support")
@@ -306,12 +312,13 @@ async def write_support(
             store=get_store(),
             body=text,
             photos=processed,
+            location=location,
         )
     except service.SelfConfirmation as exc:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)
         ) from exc
-    except service.ConflictError as exc:
+    except (service.ConflictError, service.NotStandingThere) as exc:
         raise _unprocessable(str(exc)) from exc
 
     # Only words change what a summary would say; a bare +1 does not.

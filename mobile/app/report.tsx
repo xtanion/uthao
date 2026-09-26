@@ -91,7 +91,11 @@ export default function Report() {
   const addToExisting = async (issueId: string) => {
     setBusy(true);
     try {
-      await issues.support(issueId, { body: caption.trim(), photos: attached });
+      await issues.support(issueId, {
+        body: caption.trim(),
+        photos: attached,
+        location: nearby?.point,
+      });
       setNearby(null);
       router.replace(`/issues/${issueId}`);
     } catch (e) {

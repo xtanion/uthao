@@ -1,7 +1,7 @@
 import uuid
 from datetime import date, datetime, timedelta, timezone
 
-from tests.conftest import auth, create_issue, jpeg_bytes, sign_in
+from tests.conftest import HERE, auth, create_issue, jpeg_bytes, sign_in
 
 REPORTER = "+919876543210"
 OTHERS = ["+919876500001", "+919876500002", "+919876500003", "+919876500004"]
@@ -28,7 +28,7 @@ async def open_poll(client, sender) -> tuple[str, str]:
         await client.post(
             f"/issues/{issue_id}/supports",
             headers=auth(token),
-            data={"body": "Saw it too."},
+            data={"body": "Saw it too.", **HERE},
             files=[("photos", ("p.jpg", jpeg_bytes(400, 300), "image/jpeg"))],
         )
 

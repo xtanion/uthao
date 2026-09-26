@@ -3,7 +3,7 @@ import uuid
 
 from PIL import Image
 
-from tests.conftest import auth, create_issue, jpeg_bytes, sign_in
+from tests.conftest import HERE, auth, create_issue, jpeg_bytes, sign_in
 
 REPORTER = "+919876543210"
 NEIGHBOUR = "+919876500001"
@@ -20,10 +20,11 @@ async def an_issue(client, token) -> str:
     return response.json()["id"]
 
 
-async def support(client, token, issue_id, body=None, photos=0):
+async def support(client, token, issue_id, body=None, photos=0, at=HERE):
     """A bare support still sends body="" so the request carries a form; the
-    server strips it back to nothing."""
-    data = {"body": body if body is not None else ""}
+    server strips it back to nothing. `at` is where the phone says it is, and
+    None sends no location at all."""
+    data = {"body": body if body is not None else "", **(at or {})}
     files = [
         ("photos", (f"p{i}.jpg", jpeg_bytes(320, 240), "image/jpeg"))
         for i in range(photos)
@@ -266,6 +267,7 @@ async def test_a_non_jpeg_in_a_support_is_refused(client, sender):
     response = await client.post(
         f"/issues/{issue_id}/supports",
         headers=auth(neighbour),
+        data=HERE,
         files=[("photos", ("bad.png", buffer.getvalue(), "image/png"))],
     )
 
@@ -380,3 +382,74 @@ async def test_withdrawing_drops_both_tallies(client, sender):
     detail = await client.get(f"/issues/{issue_id}")
     assert detail.json()["comment_count"] == 0
     assert detail.json()["confirmation_count"] == 0
+
+
+# --- standing there --------------------------------------------------------
+
+AWAY = {"latitude": "19.0712", "longitude": "72.8371"}  # about 1.1 km north
+DOWN_THE_ROAD = {"latitude": "19.0622", "longitude": "72.8371"}  # about 110 m
+
+
+async def test_photos_from_somewhere_else_do_not_count(client, sender):
+    """Two people in the same place with a camera is what status, escalation
+    and the poll rest on. A photo sent from across town is not that."""
+    reporter = await sign_in(client, sender, REPORTER)
+    issue_id = await an_issue(client, reporter)
+    neighbour = await sign_in(client, sender, NEIGHBOUR)
+
+    response = await support(client, neighbour, issue_id, photos=1, at=AWAY)
+
+    assert response.status_code == 422
+    assert "150 m" in response.json()["detail"]
+    detail = (await client.get(f"/issues/{issue_id}")).json()
+    assert detail["photo_support_count"] == 0
+    assert detail["photo_count"] == 1, "nothing was stored"
+
+
+async def test_photos_need_a_location(client, sender):
+    reporter = await sign_in(client, sender, REPORTER)
+    issue_id = await an_issue(client, reporter)
+    neighbour = await sign_in(client, sender, NEIGHBOUR)
+
+    response = await support(client, neighbour, issue_id, photos=1, at=None)
+
+    assert response.status_code == 422
+    assert "location" in response.json()["detail"]
+
+
+async def test_a_few_doors_down_still_counts(client, sender):
+    """GPS drifts on both phones, so the bar is wider than the duplicate radius."""
+    reporter = await sign_in(client, sender, REPORTER)
+    issue_id = await an_issue(client, reporter)
+    neighbour = await sign_in(client, sender, NEIGHBOUR)
+
+    response = await support(client, neighbour, issue_id, photos=1, at=DOWN_THE_ROAD)
+
+    assert response.status_code == 200, response.text
+    assert response.json()["photo_support_count"] == 1
+
+
+async def test_words_and_a_bare_support_need_no_location(client, sender):
+    """Neither moves the status, so neither needs anyone standing there."""
+    reporter = await sign_in(client, sender, REPORTER)
+    issue_id = await an_issue(client, reporter)
+    neighbour = await sign_in(client, sender, NEIGHBOUR)
+    third = await sign_in(client, sender, THIRD)
+
+    assert (await support(client, neighbour, issue_id, at=None)).status_code == 200
+    worded = await support(client, third, issue_id, body="Walked past it today.", at=AWAY)
+
+    assert worded.status_code == 200, worded.text
+    assert worded.json()["confirmation_count"] == 2
+
+
+async def test_half_a_location_is_refused(client, sender):
+    reporter = await sign_in(client, sender, REPORTER)
+    issue_id = await an_issue(client, reporter)
+    neighbour = await sign_in(client, sender, NEIGHBOUR)
+
+    response = await support(
+        client, neighbour, issue_id, photos=1, at={"latitude": HERE["latitude"]}
+    )
+
+    assert response.status_code == 422

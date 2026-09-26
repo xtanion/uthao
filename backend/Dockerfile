@@ -28,6 +28,7 @@ USER fihy
 EXPOSE 8000
 
 # One worker per container: scale with replicas, so AUTO_MIGRATE stays off and
-# the crons stay out of the web process.
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", \
-     "--proxy-headers", "--forwarded-allow-ips", "*"]
+# the crons stay out of the web process. X-Forwarded-For is not trusted from
+# everyone, or any caller could set their own address: the app reads the one
+# header CLIENT_IP_HEADER names instead.
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

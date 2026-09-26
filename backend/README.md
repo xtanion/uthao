@@ -213,6 +213,14 @@ follow-up photo or reply, and `_recount` leaves their row out of
 is still a `403`, because that is the old "you cannot confirm your own report"
 rule and it still holds.
 
+A support carrying photos has to come with the phone's location, within
+`SUPPORT_RADIUS_M` (150 m) of the report, or it is a `422`. Photo supports are
+what move a report to `community_verified`, and from there escalation and the
+fix-date poll, so "two people standing in the same place with a camera" has to
+be checked somewhere. 150 m is the duplicate radius plus room for two phones'
+GPS error. Words and bare supports need no location, since neither moves
+anything, and the location is checked and dropped rather than stored.
+
 Withdrawing a support deletes its photos too. They were offered as part of
 backing the report, so they leave with the backing; the reporter's own photos,
 which have no `support_id`, are untouched.
@@ -327,7 +335,11 @@ returns None, because an emailed complaint has no endpoint to poll. What comes
 back arrives at `POST /webhooks/inbound-mail`, HMAC-signed with
 `INBOUND_MAIL_SECRET` — the address is unguessable but the endpoint is not, and
 without a signature anyone who learned an address could post a fake resolution
-and close a real problem. `ClaudeReplyReader` turns the reply into one of
+and close a real problem. Both webhooks carry `X-Fihy-Timestamp` (Unix seconds)
+and `X-Fihy-Signature`, the hex HMAC-SHA256 of `<timestamp>.<raw body>`. A post
+more than `WEBHOOK_TOLERANCE_SECONDS` (300) from now is refused, so a captured
+one cannot be replayed later; inside the window, a reply whose `message_id` is
+already on the thread is dropped, which also absorbs provider retries. `ClaudeReplyReader` turns the reply into one of
 `acknowledged` / `in_progress` / `claimed` / `none`, defaulting to `none`,
 because saying work is finished when the reply does not say so closes a problem
 that is still there. Anything unclassifiable is still stored and still shown: a
@@ -441,6 +453,13 @@ reports and supports are capped per account per hour. All of them are counted
 from rows in the database rather than an in-process counter, so the limit holds
 across workers and restarts. `/auth/otp/request` answers `204` whether or not
 the number is known.
+
+The per-IP count is only as good as the address it counts. The app believes a
+single header, `CLIENT_IP_HEADER`, which must be one the edge proxy overwrites:
+`fly-client-ip` on Fly, `cf-connecting-ip` behind Cloudflare (and then only if
+the origin cannot be reached around Cloudflare). Everything else a request
+carries, `X-Forwarded-For` included, the caller could have set, so it is
+ignored. Blank uses the connecting address, which is right with no proxy.
 
 **Closing an account.** `DELETE /me` anonymises the row rather than cascading
 it away, and the distinction is the whole design. A support is somebody else's

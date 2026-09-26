@@ -1,7 +1,7 @@
 import uuid
 
 from app.config import get_settings
-from tests.conftest import auth, create_issue, jpeg_bytes, png_bytes, sign_in
+from tests.conftest import HERE, auth, create_issue, jpeg_bytes, png_bytes, sign_in
 
 REPORTER = "+919876543210"
 NEIGHBOUR = "+919876500001"
@@ -531,7 +531,7 @@ async def test_photo_supports_promote_the_issue_to_community_verified(
         response = await client.post(
             f"/issues/{issue_id}/supports",
             headers=auth(token),
-            data={"body": ""},
+            data={"body": "", **HERE},
             files=[("photos", ("p.jpg", jpeg_bytes(320, 240), "image/jpeg"))],
         )
         statuses.append(response.json()["status"])

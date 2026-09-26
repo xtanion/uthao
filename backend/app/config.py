@@ -49,6 +49,9 @@ class Settings(BaseSettings):
     # A new report within this of an existing one, in the same category, is
     # probably the same thing; the report screen offers to join it instead.
     duplicate_radius_m: float = 100.0
+    # A support carrying photos has to be sent from within this of the report:
+    # the duplicate radius plus room for two phones' GPS error.
+    support_radius_m: float = 150.0
     max_radius_m: float = 50_000.0
     default_limit: int = 20
     max_limit: int = 100
@@ -105,6 +108,9 @@ class Settings(BaseSettings):
 
     # Shared secret the mail provider signs its webhook posts with.
     inbound_mail_secret: str = ""
+    # How far a signed post's timestamp may be from now. Outside it the post
+    # is refused, so a captured one cannot be replayed later.
+    webhook_tolerance_seconds: int = 300
     # Evidence carried on the letter itself. More than a few and it bounces on
     # size at the receiving end.
     max_letter_attachments: int = 3
@@ -120,6 +126,10 @@ class Settings(BaseSettings):
     otp_max_attempts: int = 5
     otp_requests_per_phone_per_hour: int = 5
     otp_requests_per_ip_per_hour: int = 20
+    # The one header the edge proxy writes the caller's address into:
+    # fly-client-ip on Fly, cf-connecting-ip behind Cloudflare. Blank uses the
+    # connecting address. Nothing else is read, since the caller controls it.
+    client_ip_header: str = ""
     # Writes are capped per account per hour too. Somebody signed in can still
     # flood the feed, and only OTP was ever limited.
     reports_per_user_per_hour: int = 10

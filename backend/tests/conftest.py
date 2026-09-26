@@ -109,6 +109,12 @@ def auth(token: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
 
 
+# Where create_issue files a report unless told otherwise. A support carrying
+# photos has to come from near the report, so those send HERE along with them.
+LATITUDE, LONGITUDE = 19.0612, 72.8371
+HERE = {"latitude": str(LATITUDE), "longitude": str(LONGITUDE)}
+
+
 async def create_issue(
     client: AsyncClient,
     token: str,
@@ -118,8 +124,8 @@ async def create_issue(
     description: str = "Unlit after dark.",
     category: str = "manhole",
     severity: str = "high",
-    latitude: float = 19.0612,
-    longitude: float = 72.8371,
+    latitude: float = LATITUDE,
+    longitude: float = LONGITUDE,
     photo: bytes | None = None,
     photo_name: str = "photo_0.jpg",
 ):
