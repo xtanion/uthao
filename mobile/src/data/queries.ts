@@ -208,6 +208,9 @@ export function useNotifications(enabled: boolean) {
     queryFn: ({ pageParam }) => notifications.list(pageParam),
     getNextPageParam: (last) => last.next_cursor,
     enabled,
+    // Pauses while backgrounded: the focus manager is driven by AppState in
+    // app/_layout.tsx, and refetchIntervalInBackground stays off.
+    refetchInterval: 60_000,
   });
 }
 

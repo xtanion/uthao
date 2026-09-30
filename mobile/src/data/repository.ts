@@ -116,3 +116,11 @@ export class ApiError extends Error {
     super(message);
   }
 }
+
+/** `blocked` can only be undone from system settings, since the OS will not
+ *  show the prompt again; the others are worth a retry. */
+export class LocationError extends Error {
+  constructor(message: string, readonly reason: 'denied' | 'blocked' | 'disabled' | 'unavailable') {
+    super(message);
+  }
+}

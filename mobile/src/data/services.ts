@@ -2,7 +2,7 @@ import * as ImageManipulator from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import * as SecureStore from 'expo-secure-store';
-import type { AuthGateway, LocationService, PhotoSource } from './repository';
+import { LocationError, type AuthGateway, type LocationService, type PhotoSource } from './repository';
 import type { Tokens } from './client';
 import { onTokensChanged, request, setTokens } from './client';
 
@@ -68,17 +68,58 @@ export class ApiAuthGateway implements AuthGateway {
   }
 }
 
+const FIX_TIMEOUT_MS = 10_000;
+/** A report placed from a fix this old is still on the right street. */
+const LAST_KNOWN_MAX_AGE_MS = 5 * 60_000;
+
 export class DeviceLocationService implements LocationService {
   async current() {
-    const { status } = await Location.requestForegroundPermissionsAsync();
-    if (status !== 'granted') {
-      throw new Error('Location permission is needed to place and find reports.');
+    const permission = await Location.requestForegroundPermissionsAsync();
+    if (permission.status !== 'granted') {
+      throw new LocationError(
+        permission.canAskAgain
+          ? 'Location permission is needed to place and find reports.'
+          : 'Location access is turned off for fihy. Allow it in Settings to place and find reports.',
+        permission.canAskAgain ? 'denied' : 'blocked',
+      );
     }
-    const position = await Location.getCurrentPositionAsync({});
-    return {
-      latitude: position.coords.latitude,
-      longitude: position.coords.longitude,
-    };
+    if (!(await Location.hasServicesEnabledAsync())) {
+      throw new LocationError(
+        'Location services are off. Turn them on to place and find reports.',
+        'disabled',
+      );
+    }
+
+    const position = await this.fix().catch(() => null);
+    if (position) return position;
+
+    // A cold GPS indoors can fail outright (kCLErrorLocationUnknown), while a
+    // recent fix from any app is still sitting in the OS cache.
+    const cached = await Location.getLastKnownPositionAsync({ maxAge: LAST_KNOWN_MAX_AGE_MS }).catch(
+      () => null,
+    );
+    if (cached) return { latitude: cached.coords.latitude, longitude: cached.coords.longitude };
+
+    throw new LocationError(
+      "Couldn't find your location. Move somewhere with a clearer view of the sky and try again.",
+      'unavailable',
+    );
+  }
+
+  private async fix() {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<null>((resolve) => {
+      timer = setTimeout(() => resolve(null), FIX_TIMEOUT_MS);
+    });
+    try {
+      const position = await Promise.race([
+        Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
+        timeout,
+      ]);
+      return position && { latitude: position.coords.latitude, longitude: position.coords.longitude };
+    } finally {
+      clearTimeout(timer);
+    }
   }
 }
 

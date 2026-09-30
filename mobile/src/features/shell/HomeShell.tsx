@@ -6,7 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Defs, LinearGradient, Stop, Circle } from 'react-native-svg';
 import { useServices } from '../../data/context';
 import { useLocation, useProfile, useUnreadCount } from '../../data/queries';
-import { Centered, Notice, NearbyFeed } from '../issues/NearbyFeed';
+import { Centered, LocationFailed, NearbyFeed } from '../issues/NearbyFeed';
 import { MapScreen } from '../issues/MapScreen';
 import { NotificationsScreen } from '../notifications/NotificationsScreen';
 import { SearchScreen } from '../search/SearchScreen';
@@ -67,7 +67,7 @@ function Shell() {
         ) : (
           <>
             {location.isPending && <Centered><ActivityIndicator color={tone.accentDeep} /></Centered>}
-            {location.isError && <Notice text={(location.error as Error).message} />}
+            {location.isError && <LocationFailed error={location.error} onRetry={location.refetch} />}
             {location.data &&
               (section === 1 ? (
                 <SearchScreen point={location.data} />

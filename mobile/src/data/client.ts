@@ -2,6 +2,13 @@ import { ApiError } from './repository';
 
 const BASE = process.env.EXPO_PUBLIC_API_URL ?? 'http://127.0.0.1:8000';
 
+const TIMEOUT_MS = 15_000;
+/** Photo uploads on a weak connection legitimately take longer than a read. */
+const UPLOAD_TIMEOUT_MS = 60_000;
+
+/** Status 0 marks a request that never got an answer from the server. */
+export const isOffline = (error: unknown) => error instanceof ApiError && error.status === 0;
+
 export type Tokens = { access_token: string; refresh_token: string };
 
 let tokens: Tokens | null = null;
@@ -71,7 +78,18 @@ export async function request<T>(
   path: string,
   init: RequestInit & { query?: Record<string, unknown> } = {},
 ): Promise<T> {
-  const { query, ...rest } = init;
+  const { query, signal: outer, ...rest } = init;
+  const controller = new AbortController();
+  let timedOut = false;
+  const timer = setTimeout(
+    () => {
+      timedOut = true;
+      controller.abort();
+    },
+    rest.body instanceof FormData ? UPLOAD_TIMEOUT_MS : TIMEOUT_MS,
+  );
+  const cancel = () => controller.abort();
+  outer?.addEventListener('abort', cancel);
 
   const send = async () => {
     const headers = new Headers(rest.headers);
@@ -80,19 +98,34 @@ export async function request<T>(
     if (rest.body && !(rest.body instanceof FormData)) {
       headers.set('Content-Type', 'application/json');
     }
-    return fetch(url(path, query), { ...rest, headers });
+    return fetch(url(path, query), { ...rest, headers, signal: controller.signal });
   };
 
-  let response = await send();
-  if (response.status === 401 && !path.startsWith('/auth/') && (await renew())) {
-    response = await send();
-  }
+  try {
+    let response = await send();
+    if (response.status === 401 && !path.startsWith('/auth/') && (await renew())) {
+      response = await send();
+    }
 
-  if (response.status === 204) return undefined as T;
-  const text = await response.text();
-  const payload = text ? JSON.parse(text) : null;
-  if (!response.ok) {
-    throw new ApiError(payload?.detail ?? 'Something went wrong', response.status);
+    if (response.status === 204) return undefined as T;
+    const text = await response.text();
+    const payload = text ? JSON.parse(text) : null;
+    if (!response.ok) {
+      throw new ApiError(payload?.detail ?? 'Something went wrong', response.status);
+    }
+    return payload as T;
+  } catch (error) {
+    if (error instanceof ApiError || outer?.aborted) throw error;
+    // The native layer can time out on its own before our timer fires, and
+    // its message is a stack trace, so every transport failure is reworded.
+    throw new ApiError(
+      timedOut || /timed out/i.test(String((error as Error)?.message))
+        ? 'The server took too long to respond. Check your connection and try again.'
+        : 'Could not reach the server. Check your connection and try again.',
+      0,
+    );
+  } finally {
+    clearTimeout(timer);
+    outer?.removeEventListener('abort', cancel);
   }
-  return payload as T;
 }
