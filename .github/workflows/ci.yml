@@ -56,7 +56,10 @@ jobs:
       - run: uv sync --frozen --all-extras
       - run: uv run pytest -q
       - name: migrations run on postgres too
+        # The suite leaves its create_all tables behind, and an upgrade onto
+        # them fails on the first CREATE TABLE. Start from an empty schema.
         run: |
+          psql "postgresql://postgres:fihy@localhost:5432/fihy" -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
           DATABASE_URL="$TEST_DATABASE_URL" uv run alembic upgrade head
           DATABASE_URL="$TEST_DATABASE_URL" uv run alembic check
 
