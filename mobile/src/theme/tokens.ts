@@ -1,7 +1,8 @@
 import { useColorScheme } from 'react-native';
 import type { TextStyle } from 'react-native';
 
-/** Pure white or pure black ground; the accent is the only saturated colour. */
+/** Pure white or pure black ground. The accent leads; `pending` and `progress`
+ *  exist only so a report's status reads at a glance. */
 export type Tones = {
   bg: string;
   surface: string;
@@ -12,6 +13,8 @@ export type Tones = {
   accent: string;
   accentSoft: string;
   accentDeep: string;
+  pending: string;
+  progress: string;
 };
 
 export const light: Tones = {
@@ -24,6 +27,8 @@ export const light: Tones = {
   accent: '#0fc47c',
   accentSoft: '#73ffb9',
   accentDeep: '#06965d',
+  pending: '#b7791f',
+  progress: '#2563eb',
 };
 
 export const dark: Tones = {
@@ -36,6 +41,8 @@ export const dark: Tones = {
   accent: '#73ffb9',
   accentSoft: '#a8ffd4',
   accentDeep: '#2fd98f',
+  pending: '#f5b942',
+  progress: '#6ea8ff',
 };
 
 export const useTone = (): Tones =>

@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .config import Settings, get_settings
+from .config import get_settings
 from .models import Authority, AuthorityContactPoint
 from .mail import (
     Attachment,
@@ -28,6 +28,7 @@ from .mail import (
     reply_address,
 )
 from .enums import ContactChannel, ContactPointKind, Status
+from .llm import complete
 
 log = logging.getLogger(__name__)
 
@@ -134,34 +135,11 @@ class NullConcernDrafter(ConcernDrafter):
         return None
 
 
-class ClaudeConcernDrafter(ConcernDrafter):
-    def __init__(self, settings: Settings) -> None:
-        from anthropic import AsyncAnthropic
-
-        self._client = AsyncAnthropic(api_key=settings.anthropic_api_key)
-        self._model = settings.ai_summary_model
-
+class OpenAIConcernDrafter(ConcernDrafter):
     async def draft(self, request: ConcernRequest) -> str | None:
-        response = await self._client.messages.create(
-            model=self._model,
-            max_tokens=4000,
-            system=SYSTEM,
-            # Higher effort than the summary: this one is read by somebody who
-            # can refuse it, and it goes out with a resident's name behind it.
-            output_config={"effort": "medium"},
-            messages=[{"role": "user", "content": render(request)}],
+        return await complete(
+            SYSTEM, render(request), max_output_tokens=2000, purpose=f"letter for issue {request.issue_id}"
         )
-        if response.stop_reason == "refusal":
-            log.warning(
-                "concern refused for issue %s (%s)",
-                request.issue_id,
-                response.stop_details.category if response.stop_details else None,
-            )
-            return None
-        text = "".join(
-            block.text for block in response.content if block.type == "text"
-        ).strip()
-        return text or None
 
 
 class AuthorityChannel:
@@ -403,28 +381,14 @@ class NullReplyReader(ReplyReader):
         return None
 
 
-class ClaudeReplyReader(ReplyReader):
-    def __init__(self, settings: Settings) -> None:
-        from anthropic import AsyncAnthropic
-
-        self._client = AsyncAnthropic(api_key=settings.anthropic_api_key)
-        self._model = settings.ai_summary_model
-
+class OpenAIReplyReader(ReplyReader):
     async def read(self, subject: str, body: str) -> AuthorityUpdate | None:
-        response = await self._client.messages.create(
-            model=self._model,
-            max_tokens=1500,
-            system=REPLY_SYSTEM,
-            output_config={"effort": "low"},
-            messages=[
-                {"role": "user", "content": f"Subject: {subject}\n\n{body[:6000]}"}
-            ],
+        text = await complete(
+            REPLY_SYSTEM, f"Subject: {subject}\n\n{body[:6000]}", max_output_tokens=50, purpose="reply"
         )
-        if response.stop_reason == "refusal":
+        if text is None:
             return None
-        word = "".join(
-            block.text for block in response.content if block.type == "text"
-        ).strip().lower().strip(".")
+        word = text.lower().strip(".")
         status = _REPLY_STATUS.get(word)
         if status is None:
             return None
@@ -439,7 +403,7 @@ def get_reply_reader() -> ReplyReader:
     if _reply_reader is None:
         settings = get_settings()
         _reply_reader = (
-            ClaudeReplyReader(settings)
+            OpenAIReplyReader()
             if settings.ai_summary_configured
             else NullReplyReader()
         )
@@ -460,9 +424,9 @@ def get_drafter() -> ConcernDrafter:
     if _drafter is None:
         settings = get_settings()
         if settings.ai_summary_configured:
-            _drafter = ClaudeConcernDrafter(settings)
+            _drafter = OpenAIConcernDrafter()
         else:
-            log.info("no ANTHROPIC_API_KEY; concerns are not drafted")
+            log.info("no OPENAI_API_KEY; concerns are not drafted")
             _drafter = NullConcernDrafter()
     return _drafter
 

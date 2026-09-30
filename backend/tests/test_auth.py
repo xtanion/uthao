@@ -102,7 +102,7 @@ async def test_me_returns_the_signed_in_user(client, sender):
     body = response.json()
     assert response.status_code == 200
     assert body["id"]
-    assert body["display_name"] == "Resident 3210"
+    assert body["display_name"] == "Hooman 3210"
     assert body["avatar_url"] is None
 
 

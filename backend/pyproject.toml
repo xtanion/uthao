@@ -16,8 +16,8 @@ dependencies = [
     "pyjwt>=2.9",
     "python-multipart>=0.0.17",
     "alembic>=1.14",
-    "anthropic>=1.1.0",
     "google-auth>=2.57.0",
+    "openai>=3.22.1",
 ]
 
 [project.optional-dependencies]

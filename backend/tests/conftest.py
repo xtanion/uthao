@@ -34,6 +34,17 @@ def environment(tmp_path_factory) -> None:
     )
 
 
+@pytest.fixture(autouse=True)
+def no_model_titles():
+    """Tests that set a fake key for summaries would otherwise reach the real
+    API for a title. test_titles swaps in its own recorder."""
+    from app import titles
+
+    titles.set_titler(titles.NullTitler())
+    yield
+    titles.set_titler(None)
+
+
 @pytest.fixture
 async def client(environment) -> AsyncIterator[AsyncClient]:
     from app import db, storage

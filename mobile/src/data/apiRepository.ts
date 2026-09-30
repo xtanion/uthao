@@ -12,6 +12,7 @@ import type {
 } from '../domain/issue';
 import type { NotificationPage } from '../domain/notification';
 import type { Escalation } from '../domain/escalation';
+import type { Period, Stats, StatsAreaOption, StatsContributors, StatsScope } from '../domain/stats';
 import type { Account, Profile } from '../domain/profile';
 import { request } from './client';
 import { ApiError } from './repository';
@@ -34,6 +35,9 @@ const appendPhotos = (form: FormData, uris: string[]) => {
     } as unknown as Blob);
   });
 };
+
+const scopeQuery = ({ area, point }: StatsScope) =>
+  area ? { area } : { lat: point?.latitude, lng: point?.longitude };
 
 export class ApiIssuesRepository implements IssuesRepository {
   nearby({
@@ -69,6 +73,20 @@ export class ApiIssuesRepository implements IssuesRepository {
       if (error instanceof ApiError && error.status === 404) return null;
       throw error;
     }
+  }
+
+  stats(scope: StatsScope) {
+    return request<Stats>('/stats', { query: scopeQuery(scope) });
+  }
+
+  statsAreas() {
+    return request<StatsAreaOption[]>('/stats/areas');
+  }
+
+  topContributors(period: Period, scope: StatsScope) {
+    return request<StatsContributors>('/stats/contributors', {
+      query: { period, ...scopeQuery(scope) },
+    });
   }
 
   feed(point: GeoPoint, cursor?: string | null) {

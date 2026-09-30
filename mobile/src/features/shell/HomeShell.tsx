@@ -1,24 +1,30 @@
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Plus, User } from 'lucide-react-native';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Animated, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Defs, LinearGradient, Stop, Circle } from 'react-native-svg';
 import { useServices } from '../../data/context';
 import { useLocation, useProfile, useUnreadCount } from '../../data/queries';
+import { MAX_PHOTOS } from '../../domain/issue';
 import { Centered, LocationFailed, NearbyFeed } from '../issues/NearbyFeed';
 import { MapScreen } from '../issues/MapScreen';
 import { NotificationsScreen } from '../notifications/NotificationsScreen';
 import { SearchScreen } from '../search/SearchScreen';
+import { StatsScreen } from '../stats/StatsScreen';
 import { metric, type as t, useTone } from '../../theme/tokens';
 import { Avatar } from '../profile/Avatar';
 import { ChromeProvider, useBarOffset, useChrome } from './chrome';
 import { NavIcon, type NavIconName } from './NavIcon';
+import { fadeTo, settleTo, SwitchView, useReducedMotion } from './motion';
 
-const SECTIONS: NavIconName[] = ['house', 'search', 'bell'];
+const SECTIONS: NavIconName[] = ['house', 'search', 'chart', 'bell'];
 
 /** How far the FAB drops into the space the dock leaves behind. */
 const DOCK_HEIGHT = 52;
+
+const ICON = 25;
+const INDICATOR = 34;
 
 export function HomeShell() {
   return (
@@ -31,9 +37,12 @@ export function HomeShell() {
 function Shell() {
   const tone = useTone();
   const router = useRouter();
-  const { auth } = useServices();
+  const { auth, photos } = useServices();
   const [tab, setTab] = useState(0);
   const [section, setSection] = useState(0);
+  const [tabWidth, setTabWidth] = useState(0);
+  const still = useReducedMotion();
+  const tabSlide = useRef(new Animated.Value(0)).current;
   const { insets, measure, show } = useChrome();
   // Each bar clears its own height, so the shorter dock is gone while the
   // taller header is still on its way out — which is what X does.
@@ -50,6 +59,24 @@ function Shell() {
   const unread = useUnreadCount(signedIn);
   const me = useProfile(signedIn ? auth.currentUserId() : null);
 
+  // The camera opens before the composer, so backing out of it leaves the
+  // person on the feed rather than in an empty report they have to dismiss.
+  const capturing = useRef(false);
+  const startReport = useCallback(async () => {
+    if (capturing.current) return;
+    capturing.current = true;
+    try {
+      const shots = await photos.captureMany(MAX_PHOTOS);
+      if (shots.length) {
+        router.push({ pathname: '/report', params: { photos: JSON.stringify(shots) } });
+      }
+    } catch (e) {
+      Alert.alert('Could not open the camera', (e as Error).message);
+    } finally {
+      capturing.current = false;
+    }
+  }, [photos, router]);
+
   const openSection = useCallback(
     (next: number) => {
       setSection(next);
@@ -58,12 +85,22 @@ function Shell() {
     [show],
   );
 
+  const openMap = useCallback(() => {
+    setTab(1);
+    openSection(0);
+  }, [openSection]);
+
+  useEffect(() => {
+    settleTo(tabSlide, tab, still).start();
+  }, [tab, still, tabSlide]);
 
   return (
     <View style={{ flex: 1, backgroundColor: tone.bg }}>
-      <View style={StyleSheet.absoluteFill}>
-        {section === 2 ? (
+      <SwitchView position={section * 10 + tab} style={StyleSheet.absoluteFill}>
+        {section === 3 ? (
           <NotificationsScreen />
+        ) : section === 2 ? (
+          <StatsScreen onOpenMap={openMap} />
         ) : (
           <>
             {location.isPending && <Centered><ActivityIndicator color={tone.accentDeep} /></Centered>}
@@ -78,7 +115,7 @@ function Shell() {
               ))}
           </>
         )}
-      </View>
+      </SwitchView>
 
       <Animated.View
         onLayout={(e) => measure({ top: e.nativeEvent.layout.height })}
@@ -118,20 +155,48 @@ function Shell() {
               </Pressable>
           </View>
           {section === 0 && (
-            <View style={[styles.tabs, { borderBottomColor: tone.hairline }]}>
+            <View
+              style={[styles.tabs, { borderBottomColor: tone.hairline }]}
+              onLayout={(e) => setTabWidth(e.nativeEvent.layout.width / 2)}>
               {['Nearby', 'Map'].map((label, i) => (
                 <Pressable key={label} style={styles.tab} onPress={() => setTab(i)}>
-                  <Text style={[t.display(15, '700'), { color: i === tab ? tone.ink : tone.chalk }]}>
-                    {label}
-                  </Text>
-                  <View
+                  <Animated.Text
                     style={[
-                      styles.indicator,
-                      { backgroundColor: i === tab ? tone.accent : 'transparent' },
-                    ]}
-                  />
+                      t.display(15, '700'),
+                      {
+                        color: tone.ink,
+                        opacity: tabSlide.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: i === 0 ? [1, 0.45] : [0.45, 1],
+                          extrapolate: 'clamp',
+                        }),
+                      },
+                    ]}>
+                    {label}
+                  </Animated.Text>
                 </Pressable>
               ))}
+              {tabWidth > 0 && (
+                <Animated.View
+                  style={[
+                    styles.indicator,
+                    {
+                      backgroundColor: tone.accent,
+                      transform: [
+                        {
+                          translateX: tabSlide.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: [
+                              (tabWidth - INDICATOR) / 2,
+                              tabWidth + (tabWidth - INDICATOR) / 2,
+                            ],
+                          }),
+                        },
+                      ],
+                    },
+                  ]}
+                />
+              )}
             </View>
           )}
         </SafeAreaView>
@@ -145,7 +210,7 @@ function Shell() {
           },
         ]}>
         <Pressable
-          onPress={() => router.push('/report')}
+          onPress={startReport}
           style={[styles.fabButton, { backgroundColor: tone.accent }]}>
           <Plus size={30} color="#000" />
         </Pressable>
@@ -163,12 +228,12 @@ function Shell() {
         <SafeAreaView edges={['bottom']}>
           <View style={[styles.sectionBar, { borderTopColor: tone.hairline }]}>
             {SECTIONS.map((name, i) => (
-              <Pressable key={name} style={styles.section} onPress={() => openSection(i)}>
-                <NavIcon
-                  name={name}
-                  filled={i === section}
-                  color={i === section ? tone.accentDeep : tone.chalk}
-                />
+              <SectionButton
+                key={name}
+                name={name}
+                active={i === section}
+                still={still}
+                onPress={() => openSection(i)}>
                 {name === 'bell' && unread > 0 && (
                   <View style={[styles.badge, { backgroundColor: tone.accent, borderColor: tone.bg }]}>
                     <Text style={[t.meta(10, '700', 0), { color: '#000' }]}>
@@ -176,12 +241,68 @@ function Shell() {
                     </Text>
                   </View>
                 )}
-              </Pressable>
+              </SectionButton>
             ))}
           </View>
         </SafeAreaView>
       </Animated.View>
     </View>
+  );
+}
+
+/**
+ * The two weights of the glyph are stacked and cross-faded, so selecting a
+ * section shifts its colour and fill together instead of snapping.
+ */
+function SectionButton({
+  name,
+  active,
+  still,
+  onPress,
+  children,
+}: {
+  name: NavIconName;
+  active: boolean;
+  still: boolean;
+  onPress: () => void;
+  children?: React.ReactNode;
+}) {
+  const tone = useTone();
+  const lit = useRef(new Animated.Value(active ? 1 : 0)).current;
+  const scale = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    fadeTo(lit, active ? 1 : 0, still).start();
+  }, [active, still, lit]);
+
+  const press = () => {
+    if (!still) {
+      Animated.sequence([
+        Animated.timing(scale, { toValue: 0.86, duration: 90, useNativeDriver: true }),
+        Animated.spring(scale, {
+          toValue: 1,
+          stiffness: 400,
+          damping: 12,
+          mass: 0.6,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
+    onPress();
+  };
+
+  return (
+    <Pressable style={styles.section} onPress={press}>
+      <Animated.View style={{ width: ICON, height: ICON, transform: [{ scale }] }}>
+        <Animated.View style={[StyleSheet.absoluteFill, { opacity: Animated.subtract(1, lit) }]}>
+          <NavIcon name={name} filled={false} color={tone.chalk} size={ICON} />
+        </Animated.View>
+        <Animated.View style={[StyleSheet.absoluteFill, { opacity: lit }]}>
+          <NavIcon name={name} filled color={tone.accentDeep} size={ICON} />
+        </Animated.View>
+      </Animated.View>
+      {children}
+    </Pressable>
   );
 }
 
@@ -207,9 +328,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: metric.gutter, paddingTop: 10, paddingBottom: 24,
   },
   avatar: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
-  tabs: { flexDirection: 'row', borderBottomWidth: 1 },
+  tabs: { flexDirection: 'row', borderBottomWidth: 1, paddingBottom: 11 },
   tab: { flex: 1, alignItems: 'center', paddingTop: 2 },
-  indicator: { height: 3, width: 34, borderRadius: 2, marginTop: 8 },
+  indicator: {
+    position: 'absolute', left: 0, bottom: 0,
+    height: 3, width: INDICATOR, borderRadius: 2,
+  },
   fab: { position: 'absolute', right: 20, bottom: 90, width: 58, height: 58 },
   fabButton: {
     width: 58, height: 58, borderRadius: 29,

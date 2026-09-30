@@ -1,9 +1,9 @@
 import type { Status } from './issue';
 
 /**
- * How a status should read. Five tones only, each mapping onto a colour the
- * theme already has, so the palette stays honest: the accent is still the only
- * saturated colour and hazard red is still reserved for something wrong.
+ * How a status should read. Five tones, each its own colour so a card says
+ * where a report stands without a label: amber waiting, blue moving, green
+ * done, red back again. Hazard red is still reserved for something wrong.
  */
 export type StatusTone =
   | 'neutral'   // filed, nothing owed yet

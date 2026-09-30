@@ -9,7 +9,7 @@ from sqlalchemy import text
 
 from . import db, migrations
 from .config import get_settings
-from .routers import auth, issues, media, me, notifications, users, webhooks
+from .routers import auth, issues, media, me, notifications, stats, users, webhooks
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
@@ -97,6 +97,7 @@ def create_app() -> FastAPI:
     app.include_router(issues.router)
     app.include_router(me.router)
     app.include_router(notifications.router)
+    app.include_router(stats.router)
     app.include_router(users.router)
     app.include_router(webhooks.router)
     app.include_router(media.router)

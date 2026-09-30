@@ -1,5 +1,5 @@
 import React from 'react';
-import Svg, { Circle, Path } from 'react-native-svg';
+import Svg, { Circle, Path, Rect } from 'react-native-svg';
 
 /**
  * Lucide ships no filled glyphs, so the filled states are drawn from the
@@ -14,7 +14,13 @@ const BELL_BODY =
 const BELL_CLAPPER = 'M10.268 21a2 2 0 0 0 3.464 0';
 const SEARCH_HANDLE = 'm21 21-4.34-4.34';
 
-export type NavIconName = 'house' | 'search' | 'bell';
+export type NavIconName = 'house' | 'search' | 'chart' | 'bell';
+
+const CHART_BARS = [
+  { x: 3.5, y: 13, height: 7.5 },
+  { x: 10, y: 3.5, height: 17 },
+  { x: 16.5, y: 8.5, height: 12 },
+];
 
 export function NavIcon({
   name,
@@ -47,6 +53,25 @@ export function NavIcon({
             <Path d={HOUSE_BODY} {...stroke} />
           </>
         )}
+      </Svg>
+    );
+  }
+
+  if (name === 'chart') {
+    return (
+      <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+        {CHART_BARS.map((bar) => (
+          <Rect
+            key={bar.x}
+            x={bar.x}
+            y={bar.y}
+            width={4}
+            height={bar.height}
+            rx={1.2}
+            {...stroke}
+            fill={filled ? color : 'none'}
+          />
+        ))}
       </Svg>
     );
   }

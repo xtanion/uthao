@@ -1,4 +1,5 @@
 import logging
+import re
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import func, select
@@ -10,6 +11,12 @@ from .models import OtpChallenge, OtpRequestLog, User, new_id
 from .security import generate_otp, hash_otp, otp_matches
 
 log = logging.getLogger(__name__)
+
+
+# What the app calls people until they pick a name. Letters to an authority
+# say "Resident" instead; see jobs.formal_name.
+DEFAULT_NAME = "Hooman"
+DEFAULT_NAME_PATTERN = re.compile(rf"^{DEFAULT_NAME} (\d{{4}})$")
 
 
 class RateLimited(Exception):
@@ -87,7 +94,7 @@ async def upsert_user(session: AsyncSession, phone: str) -> User:
     if user is not None:
         return user
     user = User(
-        id=new_id(), phone=phone, display_name=f"Resident {phone[-4:]}"
+        id=new_id(), phone=phone, display_name=f"{DEFAULT_NAME} {phone[-4:]}"
     )
     session.add(user)
     try:

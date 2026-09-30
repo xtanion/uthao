@@ -119,7 +119,7 @@ async def test_going_names_the_people_who_said_yes(client, sender):
     assert row["vote_count"] == 3
     assert len(row["going"]) == 3
     # The proposer counts as going, and every name carries an id to link on.
-    assert "Resident 0001" in names
+    assert "Hooman 0001" in names
     assert all(person["id"] for person in row["going"])
 
 
@@ -143,7 +143,7 @@ async def test_withdrawing_removes_you_from_going(client, sender):
 
     row = (await client.get(f"/issues/{issue_id}/fix-dates")).json()["items"][0]
     assert row["vote_count"] == 1
-    assert [p["display_name"] for p in row["going"]] == ["Resident 0001"]
+    assert [p["display_name"] for p in row["going"]] == ["Hooman 0001"]
 
 
 async def test_going_is_present_but_empty_before_anyone_says_yes(client, sender):

@@ -126,12 +126,15 @@ class Settings(BaseSettings):
 
     # Plain-language summaries of an issue and its replies. With no key the
     # summarizer is a no-op and ai_summary stays null.
-    anthropic_api_key: str = ""
-    ai_summary_model: str = "claude-opus-5"
+    openai_api_key: str = ""
+    # Used for titles, summaries, routing, letters and reading replies.
+    ai_model: str = "gpt-6-luna"
     # Classifying a report and choosing the desk it goes to. Separate from
     # summaries because this one decides where a resident's complaint is sent,
     # and turning it off should not cost the summaries.
     ai_routing: bool = True
+    # Rewrites the clipped caption the app sends as a title into a headline.
+    ai_titles: bool = True
     # A summary is rewritten at most this often, however many people reply.
     ai_summary_min_interval_seconds: int = 300
 
@@ -184,11 +187,15 @@ class Settings(BaseSettings):
 
     @property
     def ai_summary_configured(self) -> bool:
-        return bool(self.anthropic_api_key)
+        return bool(self.openai_api_key)
+
+    @property
+    def ai_titles_configured(self) -> bool:
+        return bool(self.openai_api_key and self.ai_titles)
 
     @property
     def ai_routing_configured(self) -> bool:
-        return bool(self.anthropic_api_key and self.ai_routing)
+        return bool(self.openai_api_key and self.ai_routing)
 
     @property
     def storage_configured(self) -> bool:

@@ -221,7 +221,7 @@ async def create(
 
     processed = await _processed_photos(photos)
     try:
-        issue, _ = await service.create_issue(
+        issue, created = await service.create_issue(
             session,
             reporter=reporter,
             store=get_store(),
@@ -237,6 +237,14 @@ async def create(
     except service.ConflictError as exc:
         raise _unprocessable(str(exc)) from exc
 
+    # Background tasks run in order, so the summary is written against the
+    # headline rather than the clipped caption it replaces.
+    if (
+        created
+        and get_settings().ai_titles_configured
+        and service.title_is_derived(issue.title, issue.description)
+    ):
+        background.add_task(service.refresh_title, issue.id)
     if service.summary_is_due(issue):
         background.add_task(service.refresh_summary, issue.id)
     return await service.serialize(session, issue, reporter, get_store())

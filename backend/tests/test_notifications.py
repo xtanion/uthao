@@ -32,7 +32,7 @@ async def test_a_confirmation_notifies_the_reporter(client, sender):
     row = body["items"][0]
     assert row["type"] == "support_received"
     assert row["read"] is False
-    assert row["actor_name"] == "Resident 0001"
+    assert row["actor_name"] == "Hooman 0001"
     assert row["issue"]["id"] == issue_id
     assert row["issue"]["title"] == "Cover missing on the footpath side"
     assert row["created_at"].endswith("Z")

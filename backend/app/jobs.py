@@ -56,7 +56,8 @@ from .models import (
 )
 from .enums import MessageDirection
 from .storage import get_store
-from .service import aware
+from .otp import DEFAULT_NAME_PATTERN
+from .service import DELETED_NAME, aware
 
 log = logging.getLogger(__name__)
 
@@ -75,6 +76,18 @@ class Report:
             f"considered={self.considered} drafted={self.drafted} sent={self.sent} "
             f"failed={self.failed} skipped={self.skipped} moved={self.moved}"
         )
+
+
+def formal_name(name: str | None) -> str:
+    """The app's playful defaults do not belong on a letter to a Chief Engineer.
+    A name the person chose is theirs and goes out as written."""
+    if not name:
+        return "a resident"
+    if name == DELETED_NAME:
+        return "a former resident"
+    if match := DEFAULT_NAME_PATTERN.match(name):
+        return f"Resident {match.group(1)}"
+    return name
 
 
 def _record(session: AsyncSession, issue: Issue, was: Status) -> None:
@@ -136,7 +149,7 @@ async def _evidence(session: AsyncSession, issue: Issue) -> list[Attachment]:
             Attachment(
                 filename=f"evidence-{index}.jpg",
                 content=content,
-                credit=who.display_name if who else "a resident",
+                credit=formal_name(who.display_name if who else None),
             )
         )
     return attachments
@@ -225,7 +238,7 @@ async def escalate_confirmed(limit: int | None = None) -> Report:
             confirmed = aware(issue.confirmed_at)
             request = ConcernRequest(
                 issue_id=issue.id,
-                reporter_name=reporter.display_name if reporter else "a resident",
+                reporter_name=formal_name(reporter.display_name if reporter else None),
                 title=issue.title,
                 description=issue.description,
                 category=issue.category.value,

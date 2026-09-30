@@ -16,6 +16,7 @@ import type {
 } from '../domain/issue';
 import type { Notification, NotificationPage } from '../domain/notification';
 import type { Account, Profile } from '../domain/profile';
+import type { Period, Stats, StatsArea, StatsAreaOption, StatsContributors, StatsScope } from '../domain/stats';
 import { REPUTATION_WEIGHTS } from '../domain/profile';
 import { CATEGORIES, SEVERITIES, categoryLabel, contributionsOpen } from '../domain/issue';
 import type {
@@ -44,12 +45,21 @@ const LOCALITIES = [
   'Andheri East', 'Mahim Junction', 'Matunga', 'Vile Parle',
 ];
 
-export const DEMO_USER: Reporter = { id: 'demo-user', display_name: 'Resident 3210' };
+const DEMO_AREA: StatsArea = {
+  slug: 'bmc-mumbai',
+  city: 'Mumbai',
+  min_latitude: 18.89,
+  max_latitude: 19.28,
+  min_longitude: 72.77,
+  max_longitude: 72.99,
+};
+
+export const DEMO_USER: Reporter = { id: 'demo-user', display_name: 'Hooman 3210' };
 
 const NEIGHBOURS: Reporter[] = [
-  { id: 'demo-resident-1', display_name: 'Resident 4821' },
-  { id: 'demo-resident-2', display_name: 'Resident 7734' },
-  { id: 'demo-resident-3', display_name: 'Resident 1190' },
+  { id: 'demo-resident-1', display_name: 'Hooman 4821' },
+  { id: 'demo-resident-2', display_name: 'Hooman 7734' },
+  { id: 'demo-resident-3', display_name: 'Hooman 1190' },
 ];
 
 const base = (over: Partial<Issue> & Pick<Issue, 'id' | 'title' | 'description'>): Issue => ({
@@ -121,7 +131,7 @@ export const demoIssues: Issue[] = [
     return base({
       id: `demo-seed-${i + 4}`,
       title: `${categoryLabel[category]} reported nearby`,
-      description: `Residents flagged a ${categoryLabel[category].toLowerCase()} problem on this stretch. Reported ${i + 1} times this month.`,
+      description: `Hoomans flagged a ${categoryLabel[category].toLowerCase()} problem on this stretch. Reported ${i + 1} times this month.`,
       category,
       severity: SEVERITIES[i % SEVERITIES.length] as Severity,
       status: (['reported', 'community_verified', 'submitted_to_authority', 'in_progress'] as Status[])[i % 4],
@@ -192,6 +202,96 @@ export class FakeIssuesRepository implements IssuesRepository {
   /** Demo mode never raises anything with an authority. */
   async escalation() {
     return null;
+  }
+
+  /** The seed has nothing resolved, so every third report counts as fixed. */
+  async stats(_scope: StatsScope): Promise<Stats> {
+    await sleep(pageLatency);
+    const counted = this.issues.filter((i) => i.status !== 'removed' && i.status !== 'duplicate');
+    const fixed = (i: Issue, n: number) => i.status === 'resolved' || n % 3 === 0;
+    const raised: Status[] = [
+      'submitted_to_authority', 'authority_acknowledged', 'in_progress',
+      'resolution_claimed', 'resolved', 'reopened',
+    ];
+
+    const monday = new Date();
+    monday.setHours(0, 0, 0, 0);
+    monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7) - 7 * 11);
+    const weeks = Array.from({ length: 12 }, (_, w) => ({
+      week_start: new Date(monday.getTime() + w * 7 * 864e5).toISOString().slice(0, 10),
+      reported: 2 + ((w * 5) % 7),
+      resolved: 1 + ((w * 3) % 5),
+    }));
+
+    const categories = new Map<Category, { total: number; resolved: number }>();
+    counted.forEach((issue, n) => {
+      const row = categories.get(issue.category) ?? { total: 0, resolved: 0 };
+      row.total += 1;
+      if (fixed(issue, n)) row.resolved += 1;
+      categories.set(issue.category, row);
+    });
+
+    const people = [DEMO_USER, ...NEIGHBOURS];
+    return {
+      area: DEMO_AREA,
+      totals: {
+        reported: counted.length,
+        confirmed: counted.filter((i) => i.status !== 'reported').length,
+        raised: counted.filter((i) => raised.includes(i.status)).length,
+        resolved: counted.filter(fixed).length,
+        photos: counted.reduce((sum, i) => sum + Math.max(i.photo_count, 1), 0),
+        contributors: people.length,
+        emails_sent: counted.filter((i) => raised.includes(i.status)).length,
+      },
+      weeks,
+      categories: [...categories.entries()]
+        .map(([category, row]) => ({ category, ...row }))
+        .sort((a, b) => b.total - a.total),
+      points: counted.map((i, n) => ({
+        latitude: i.latitude,
+        longitude: i.longitude,
+        resolved: fixed(i, n),
+      })),
+      generated_at: new Date().toISOString(),
+    };
+  }
+
+  async statsAreas(): Promise<StatsAreaOption[]> {
+    return [{ slug: DEMO_AREA.slug, city: DEMO_AREA.city, reports: this.issues.length }];
+  }
+
+  async topContributors(period: Period, _scope: StatsScope): Promise<StatsContributors> {
+    await sleep(pageLatency);
+    const since = new Date();
+    since.setHours(0, 0, 0, 0);
+    if (period !== 'day') since.setDate(1);
+    if (period === 'year') since.setMonth(0);
+
+    const counted = this.issues.filter((i) => i.status !== 'removed' && i.status !== 'duplicate');
+    const inPeriod = counted.filter((i) => new Date(i.created_at) >= since);
+    const items = [DEMO_USER, ...NEIGHBOURS]
+      .map((person) => {
+        const reports = inPeriod.filter((i) => i.reporter.id === person.id);
+        const resolutions = reports.filter(
+          (i) => i.status === 'resolved' || counted.indexOf(i) % 3 === 0,
+        ).length;
+        const received = reports.reduce((sum, i) => sum + i.confirmation_count, 0);
+        return {
+          id: person.id,
+          display_name: person.display_name,
+          avatar_url: null,
+          reports: reports.length,
+          resolutions,
+          reputation:
+            received * REPUTATION_WEIGHTS.upvote +
+            reports.length * REPUTATION_WEIGHTS.post +
+            resolutions * REPUTATION_WEIGHTS.resolution,
+        };
+      })
+      .filter((row) => row.reputation > 0)
+      .sort((a, b) => b.reputation - a.reputation)
+      .slice(0, 5);
+    return { period, since: since.toISOString(), area: DEMO_AREA, items };
   }
 
   /** Demo data all sits on one street, so the ladder never has to climb. */
@@ -517,7 +617,7 @@ export class FakeNotificationsRepository implements NotificationsRepository {
           id: `demo-note-${index}-a`,
           type: 'support_received',
           read: index > 0,
-          actor_name: ['Resident 4821', 'Resident 7734', 'Resident 1190'][index % 3],
+          actor_name: ['Hooman 4821', 'Hooman 7734', 'Hooman 1190'][index % 3],
           from_status: null,
           to_status: null,
           issue: summarize(issue),

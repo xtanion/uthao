@@ -64,7 +64,7 @@ async def test_it_makes_the_same_account_the_otp_path_would(client, verifier):
     response = await sign_in(client)
     me = await client.get("/me", headers=auth(response.json()["access_token"]))
 
-    assert me.json()["display_name"] == "Resident 3210", "named from the number"
+    assert me.json()["display_name"] == "Hooman 3210", "named from the number"
 
 
 async def test_signing_in_twice_is_the_same_person(client, verifier):

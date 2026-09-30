@@ -67,8 +67,8 @@ function Corroboration({
               ? 'you saw this — tap to withdraw'
               : `you and ${count - 1} other${count === 2 ? '' : 's'} saw this`
             : count === 1
-              ? 'resident independently saw this'
-              : 'residents independently saw this'}
+              ? 'hooman independently saw this'
+              : 'hoomans independently saw this'}
         </Text>
       </View>
     </Pressable>

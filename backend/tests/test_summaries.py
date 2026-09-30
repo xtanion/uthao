@@ -30,13 +30,13 @@ def summarizer(monkeypatch):
     from app import summarize
     from app.config import get_settings
 
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key-not-used")
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key-not-used")
     get_settings.cache_clear()
     recorder = RecordingSummarizer()
     summarize.set_summarizer(recorder)
     yield recorder
     summarize.set_summarizer(None)
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     get_settings.cache_clear()
 
 
@@ -167,7 +167,7 @@ async def test_a_summarizer_that_fails_does_not_break_the_report(client, sender,
         async def summarize(self, request):
             raise RuntimeError("the model is down")
 
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key-not-used")
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key-not-used")
     get_settings.cache_clear()
     summarize.set_summarizer(Broken())
     try:
@@ -178,7 +178,7 @@ async def test_a_summarizer_that_fails_does_not_break_the_report(client, sender,
         assert detail.json()["ai_summary"] is None
     finally:
         summarize.set_summarizer(None)
-        monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
         get_settings.cache_clear()
 
 

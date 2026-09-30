@@ -1,22 +1,25 @@
 import React from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
-import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
+import Svg, { Line } from 'react-native-svg';
 import { initials } from '../../domain/profile';
-import { type as t } from '../../theme/tokens';
 
-/**
- * Fixed rather than theme-derived: the gradient is the same in both themes, so
- * letting the ink follow the theme would give one person two different faces.
- * Dark ink also holds up across the whole ramp, where white washes out at the
- * light end.
- */
-const INITIAL_INK = '#101014';
+const PALETTE = [
+  '#e4572e', '#f3a712', '#29335c', '#0fc47c', '#3a86ff', '#8e6c8a',
+  '#2d6a4f', '#ffb4a2', '#ffd60a', '#7209b7', '#118ab2', '#ef476f',
+];
 
-/** Deterministic hue from the id, so a person keeps the same face everywhere. */
-const hue = (seed: string) => {
+const GRID_CELLS = 8;
+
+const seed = (id: string) => {
   let total = 0;
-  for (let i = 0; i < seed.length; i += 1) total = (total * 31 + seed.charCodeAt(i)) % 360;
+  for (let i = 0; i < id.length; i += 1) total = (total * 31 + id.charCodeAt(i)) >>> 0;
   return total;
+};
+
+const inkOn = (hex: string) => {
+  const n = parseInt(hex.slice(1), 16);
+  const luminance = (0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255;
+  return luminance > 0.6 ? '#101014' : '#ffffff';
 };
 
 export function Avatar({
@@ -42,21 +45,37 @@ export function Avatar({
     );
   }
 
-  const base = hue(id);
-  const gradient = `avatar-${id}`;
+  const fill = PALETTE[seed(id) % PALETTE.length];
+  const ink = inkOn(fill);
+  const fontSize = size * 0.4;
+  const cell = size / GRID_CELLS;
+  const lines = Array.from({ length: GRID_CELLS - 1 }, (_, i) => (i + 1) * cell);
+
   return (
-    <View style={{ width: size, height: size, borderRadius: radius, overflow: 'hidden' }}>
+    <View style={{ width: size, height: size, borderRadius: radius, overflow: 'hidden', backgroundColor: fill }}>
       <Svg width={size} height={size} style={StyleSheet.absoluteFill}>
-        <Defs>
-          <LinearGradient id={gradient} x1="0" y1="0" x2="1" y2="1">
-            <Stop offset="0" stopColor={`hsl(${base}, 72%, 68%)`} />
-            <Stop offset="1" stopColor={`hsl(${(base + 48) % 360}, 68%, 44%)`} />
-          </LinearGradient>
-        </Defs>
-        <Rect width={size} height={size} fill={`url(#${gradient})`} />
+        {lines.map((at) => (
+          <React.Fragment key={at}>
+            <Line x1={at} x2={at} y1={0} y2={size} stroke={ink} strokeOpacity={0.14} strokeWidth={Math.max(size / 128, 0.5)} />
+            <Line x1={0} x2={size} y1={at} y2={at} stroke={ink} strokeOpacity={0.14} strokeWidth={Math.max(size / 128, 0.5)} />
+          </React.Fragment>
+        ))}
       </Svg>
       <View style={styles.center}>
-        <Text style={[t.display(size * 0.36, '700'), { color: INITIAL_INK }]}>
+        <Text
+          allowFontScaling={false}
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.5}
+          style={{
+            width: size * 0.8,
+            fontFamily: 'GeistPixel-Square',
+            fontSize,
+            lineHeight: fontSize * 1.25,
+            textAlign: 'center',
+            includeFontPadding: false,
+            color: ink,
+          }}>
           {initials(name)}
         </Text>
       </View>
@@ -65,5 +84,5 @@ export function Avatar({
 }
 
 const styles = StyleSheet.create({
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  center: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, alignItems: 'center', justifyContent: 'center' },
 });

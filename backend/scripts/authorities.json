@@ -1,0 +1,383 @@
+{
+  "_comment": "Authority contacts for seeding. Checked against each body's own site on the verified_at date. Five of the six corporations publish no complaint address at all - they run a portal and a helpline - and their null email is deliberate, not missing data. Commissioners' addresses are published but excluded on purpose: an executive desk receiving automated pothole letters is how a sending domain earns a spam reputation. The mcgm.gov.in addresses come from a July 2019 department directory and want a test message before a resident's complaint is sent to one.",
+  "verified_at": "2026-08-31T00:00:00+00:00",
+  "authorities": [
+    {
+      "slug": "pmc-pune",
+      "name": "Pune Municipal Corporation",
+      "city": "Pune",
+      "state": "Maharashtra",
+      "channel": "email",
+      "email": "feedback@punecorporation.org",
+      "portal_url": "https://complaint.pmc.gov.in/",
+      "helpline": "020-25501000",
+      "min_latitude": 18.41,
+      "max_latitude": 18.64,
+      "min_longitude": 73.72,
+      "max_longitude": 73.99,
+      "source_url": "https://www.pmc.gov.in/en/grievance-redressal",
+      "active": true
+    },
+    {
+      "slug": "bmc-mumbai",
+      "name": "Brihanmumbai Municipal Corporation",
+      "city": "Mumbai",
+      "state": "Maharashtra",
+      "channel": "portal",
+      "email": null,
+      "portal_url": "https://portal.mcgm.gov.in/irj/portal/anonymous/qlcomplaintreg",
+      "helpline": "1916",
+      "min_latitude": 18.89,
+      "max_latitude": 19.28,
+      "min_longitude": 72.77,
+      "max_longitude": 72.99,
+      "source_url": "https://portal.mcgm.gov.in/irj/portal/anonymous/contactus",
+      "active": true
+    },
+    {
+      "slug": "bbmp-bengaluru",
+      "name": "Bruhat Bengaluru Mahanagara Palike",
+      "city": "Bengaluru",
+      "state": "Karnataka",
+      "channel": "portal",
+      "email": null,
+      "portal_url": "https://site.bbmp.gov.in/MP3.html",
+      "helpline": "1533",
+      "min_latitude": 12.83,
+      "max_latitude": 13.14,
+      "min_longitude": 77.46,
+      "max_longitude": 77.78,
+      "source_url": "https://site.bbmp.gov.in/contact.html",
+      "active": true
+    },
+    {
+      "slug": "mcd-delhi",
+      "name": "Municipal Corporation of Delhi",
+      "city": "Delhi",
+      "state": "Delhi",
+      "channel": "portal",
+      "email": null,
+      "portal_url": "https://mcdonline.nic.in/portal/contactUs",
+      "helpline": "155305",
+      "min_latitude": 28.4,
+      "max_latitude": 28.88,
+      "min_longitude": 76.84,
+      "max_longitude": 77.35,
+      "source_url": "https://mcdonline.nic.in/portal/contactUs",
+      "active": true
+    },
+    {
+      "slug": "gcc-chennai",
+      "name": "Greater Chennai Corporation",
+      "city": "Chennai",
+      "state": "Tamil Nadu",
+      "channel": "portal",
+      "email": null,
+      "portal_url": "https://gccservices.chennaicorporation.gov.in/pgr",
+      "helpline": "1913",
+      "min_latitude": 12.83,
+      "max_latitude": 13.24,
+      "min_longitude": 80.12,
+      "max_longitude": 80.33,
+      "source_url": "https://chennaicorporation.gov.in/gcc/complaints/",
+      "active": true
+    },
+    {
+      "slug": "ghmc-hyderabad",
+      "name": "Greater Hyderabad Municipal Corporation",
+      "city": "Hyderabad",
+      "state": "Telangana",
+      "channel": "portal",
+      "email": null,
+      "portal_url": "https://igs.ghmc.gov.in/",
+      "helpline": "21111111",
+      "min_latitude": 17.25,
+      "max_latitude": 17.6,
+      "min_longitude": 78.24,
+      "max_longitude": 78.63,
+      "source_url": "https://www.ghmc.gov.in/KeyContacts.aspx",
+      "active": true
+    }
+  ],
+  "contact_points": [
+    {
+      "authority_slug": "bmc-mumbai",
+      "kind": "department",
+      "key": "pothole_road",
+      "name": "Chief Engineer (Roads and Traffic)",
+      "email": "che.rt@mcgm.gov.in",
+      "active": true,
+      "source_url": "https://portal.mcgm.gov.in/irj/go/km/docs/documents/MCGM%20Department%20List/IT%20Department/Email%20IDs%20for%20MCGM%20employees/Executive%20feature%20mcgm%20email%20users.pdf"
+    },
+    {
+      "authority_slug": "bmc-mumbai",
+      "kind": "department",
+      "key": "footpath",
+      "name": "Chief Engineer (Roads and Traffic)",
+      "email": "che.rt@mcgm.gov.in",
+      "active": true,
+      "source_url": "https://portal.mcgm.gov.in/irj/go/km/docs/documents/MCGM%20Department%20List/IT%20Department/Email%20IDs%20for%20MCGM%20employees/Executive%20feature%20mcgm%20email%20users.pdf"
+    },
+    {
+      "authority_slug": "bmc-mumbai",
+      "kind": "department",
+      "key": "garbage",
+      "name": "Chief Engineer (Solid Waste Management)",
+      "email": "che.swm@mcgm.gov.in",
+      "active": true,
+      "source_url": "https://portal.mcgm.gov.in/irj/go/km/docs/documents/MCGM%20Department%20List/IT%20Department/Email%20IDs%20for%20MCGM%20employees/Executive%20feature%20mcgm%20email%20users.pdf"
+    },
+    {
+      "authority_slug": "bmc-mumbai",
+      "kind": "department",
+      "key": "water_drainage",
+      "name": "Chief Engineer (Storm Water Drains)",
+      "email": "che.swd@mcgm.gov.in",
+      "active": true,
+      "source_url": "https://portal.mcgm.gov.in/irj/go/km/docs/documents/MCGM%20Department%20List/IT%20Department/Email%20IDs%20for%20MCGM%20employees/Executive%20feature%20mcgm%20email%20users.pdf"
+    },
+    {
+      "authority_slug": "bmc-mumbai",
+      "kind": "department",
+      "key": "manhole",
+      "name": "Chief Engineer (Storm Water Drains)",
+      "email": "che.swd@mcgm.gov.in",
+      "active": true,
+      "source_url": "https://portal.mcgm.gov.in/irj/go/km/docs/documents/MCGM%20Department%20List/IT%20Department/Email%20IDs%20for%20MCGM%20employees/Executive%20feature%20mcgm%20email%20users.pdf"
+    },
+    {
+      "authority_slug": "bmc-mumbai",
+      "kind": "department",
+      "key": "streetlight",
+      "name": "Chief Engineer (Mechanical and Electrical)",
+      "email": "che.me@mcgm.gov.in",
+      "active": true,
+      "source_url": "https://portal.mcgm.gov.in/irj/go/km/docs/documents/MCGM%20Department%20List/IT%20Department/Email%20IDs%20for%20MCGM%20employees/Executive%20feature%20mcgm%20email%20users.pdf"
+    },
+    {
+      "authority_slug": "bmc-mumbai",
+      "kind": "department",
+      "key": "fallen_tree",
+      "name": "Superintendent of Gardens",
+      "email": "sg.gardens@mcgm.gov.in",
+      "active": true,
+      "source_url": "https://portal.mcgm.gov.in/irj/go/km/docs/documents/MCGM%20Department%20List/IT%20Department/Email%20IDs%20for%20MCGM%20employees/Executive%20feature%20mcgm%20email%20users.pdf"
+    },
+    {
+      "authority_slug": "bmc-mumbai",
+      "kind": "ward",
+      "key": "A",
+      "name": "Assistant Commissioner, A Ward",
+      "email": "ac.a@mcgm.gov.in",
+      "active": false,
+      "source_url": "https://portal.mcgm.gov.in/irj/go/km/docs/documents/MCGM%20Department%20List/IT%20Department/Email%20IDs%20for%20MCGM%20employees/Executive%20feature%20mcgm%20email%20users.pdf"
+    },
+    {
+      "authority_slug": "bmc-mumbai",
+      "kind": "ward",
+      "key": "B",
+      "name": "Assistant Commissioner, B Ward",
+      "email": "ac.b@mcgm.gov.in",
+      "active": false,
+      "source_url": "https://portal.mcgm.gov.in/irj/go/km/docs/documents/MCGM%20Department%20List/IT%20Department/Email%20IDs%20for%20MCGM%20employees/Executive%20feature%20mcgm%20email%20users.pdf"
+    },
+    {
+      "authority_slug": "bmc-mumbai",
+      "kind": "ward",
+      "key": "C",
+      "name": "Assistant Commissioner, C Ward",
+      "email": "ac.c@mcgm.gov.in",
+      "active": false,
+      "source_url": "https://portal.mcgm.gov.in/irj/go/km/docs/documents/MCGM%20Department%20List/IT%20Department/Email%20IDs%20for%20MCGM%20employees/Executive%20feature%20mcgm%20email%20users.pdf"
+    },
+    {
+      "authority_slug": "bmc-mumbai",
+      "kind": "ward",
+      "key": "D",
+      "name": "Assistant Commissioner, D Ward",
+      "email": "ac.d@mcgm.gov.in",
+      "active": false,
+      "source_url": "https://portal.mcgm.gov.in/irj/go/km/docs/documents/MCGM%20Department%20List/IT%20Department/Email%20IDs%20for%20MCGM%20employees/Executive%20feature%20mcgm%20email%20users.pdf"
+    },
+    {
+      "authority_slug": "bmc-mumbai",
+      "kind": "ward",
+      "key": "E",
+      "name": "Assistant Commissioner, E Ward",
+      "email": "ac.e@mcgm.gov.in",
+      "active": false,
+      "source_url": "https://portal.mcgm.gov.in/irj/go/km/docs/documents/MCGM%20Department%20List/IT%20Department/Email%20IDs%20for%20MCGM%20employees/Executive%20feature%20mcgm%20email%20users.pdf"
+    },
+    {
+      "authority_slug": "bmc-mumbai",
+      "kind": "ward",
+      "key": "F/North",
+      "name": "Assistant Commissioner, F/North Ward",
+      "email": "ac.fn@mcgm.gov.in",
+      "active": false,
+      "source_url": "https://portal.mcgm.gov.in/irj/go/km/docs/documents/MCGM%20Department%20List/IT%20Department/Email%20IDs%20for%20MCGM%20employees/Executive%20feature%20mcgm%20email%20users.pdf"
+    },
+    {
+      "authority_slug": "bmc-mumbai",
+      "kind": "ward",
+      "key": "F/South",
+      "name": "Assistant Commissioner, F/South Ward",
+      "email": "ac.fs@mcgm.gov.in",
+      "active": false,
+      "source_url": "https://portal.mcgm.gov.in/irj/go/km/docs/documents/MCGM%20Department%20List/IT%20Department/Email%20IDs%20for%20MCGM%20employees/Executive%20feature%20mcgm%20email%20users.pdf"
+    },
+    {
+      "authority_slug": "bmc-mumbai",
+      "kind": "ward",
+      "key": "G/North",
+      "name": "Assistant Commissioner, G/North Ward",
+      "email": "ac.gn@mcgm.gov.in",
+      "active": false,
+      "source_url": "https://portal.mcgm.gov.in/irj/go/km/docs/documents/MCGM%20Department%20List/IT%20Department/Email%20IDs%20for%20MCGM%20employees/Executive%20feature%20mcgm%20email%20users.pdf"
+    },
+    {
+      "authority_slug": "bmc-mumbai",
+      "kind": "ward",
+      "key": "G/South",
+      "name": "Assistant Commissioner, G/South Ward",
+      "email": "ac.gs@mcgm.gov.in",
+      "active": false,
+      "source_url": "https://portal.mcgm.gov.in/irj/go/km/docs/documents/MCGM%20Department%20List/IT%20Department/Email%20IDs%20for%20MCGM%20employees/Executive%20feature%20mcgm%20email%20users.pdf"
+    },
+    {
+      "authority_slug": "bmc-mumbai",
+      "kind": "ward",
+      "key": "H/East",
+      "name": "Assistant Commissioner, H/East Ward",
+      "email": "ac.heast@mcgm.gov.in",
+      "active": false,
+      "source_url": "https://portal.mcgm.gov.in/irj/go/km/docs/documents/MCGM%20Department%20List/IT%20Department/Email%20IDs%20for%20MCGM%20employees/Executive%20feature%20mcgm%20email%20users.pdf"
+    },
+    {
+      "authority_slug": "bmc-mumbai",
+      "kind": "ward",
+      "key": "H/West",
+      "name": "Assistant Commissioner, H/West Ward",
+      "email": "ac.hw@mcgm.gov.in",
+      "active": false,
+      "source_url": "https://portal.mcgm.gov.in/irj/go/km/docs/documents/MCGM%20Department%20List/IT%20Department/Email%20IDs%20for%20MCGM%20employees/Executive%20feature%20mcgm%20email%20users.pdf"
+    },
+    {
+      "authority_slug": "bmc-mumbai",
+      "kind": "ward",
+      "key": "K/East",
+      "name": "Assistant Commissioner, K/East Ward",
+      "email": "ac.ke@mcgm.gov.in",
+      "active": false,
+      "source_url": "https://portal.mcgm.gov.in/irj/go/km/docs/documents/MCGM%20Department%20List/IT%20Department/Email%20IDs%20for%20MCGM%20employees/Executive%20feature%20mcgm%20email%20users.pdf"
+    },
+    {
+      "authority_slug": "bmc-mumbai",
+      "kind": "ward",
+      "key": "K/West",
+      "name": "Assistant Commissioner, K/West Ward",
+      "email": "ac.kw@mcgm.gov.in",
+      "active": false,
+      "source_url": "https://portal.mcgm.gov.in/irj/go/km/docs/documents/MCGM%20Department%20List/IT%20Department/Email%20IDs%20for%20MCGM%20employees/Executive%20feature%20mcgm%20email%20users.pdf"
+    },
+    {
+      "authority_slug": "bmc-mumbai",
+      "kind": "ward",
+      "key": "L",
+      "name": "Assistant Commissioner, L Ward",
+      "email": "ac.l@mcgm.gov.in",
+      "active": false,
+      "source_url": "https://portal.mcgm.gov.in/irj/go/km/docs/documents/MCGM%20Department%20List/IT%20Department/Email%20IDs%20for%20MCGM%20employees/Executive%20feature%20mcgm%20email%20users.pdf"
+    },
+    {
+      "authority_slug": "bmc-mumbai",
+      "kind": "ward",
+      "key": "M/East",
+      "name": "Assistant Commissioner, M/East Ward",
+      "email": "ac.meast@mcgm.gov.in",
+      "active": false,
+      "source_url": "https://portal.mcgm.gov.in/irj/go/km/docs/documents/MCGM%20Department%20List/IT%20Department/Email%20IDs%20for%20MCGM%20employees/Executive%20feature%20mcgm%20email%20users.pdf"
+    },
+    {
+      "authority_slug": "bmc-mumbai",
+      "kind": "ward",
+      "key": "M/West",
+      "name": "Assistant Commissioner, M/West Ward",
+      "email": "ac.mw@mcgm.gov.in",
+      "active": false,
+      "source_url": "https://portal.mcgm.gov.in/irj/go/km/docs/documents/MCGM%20Department%20List/IT%20Department/Email%20IDs%20for%20MCGM%20employees/Executive%20feature%20mcgm%20email%20users.pdf"
+    },
+    {
+      "authority_slug": "bmc-mumbai",
+      "kind": "ward",
+      "key": "N",
+      "name": "Assistant Commissioner, N Ward",
+      "email": "ac.n@mcgm.gov.in",
+      "active": false,
+      "source_url": "https://portal.mcgm.gov.in/irj/go/km/docs/documents/MCGM%20Department%20List/IT%20Department/Email%20IDs%20for%20MCGM%20employees/Executive%20feature%20mcgm%20email%20users.pdf"
+    },
+    {
+      "authority_slug": "bmc-mumbai",
+      "kind": "ward",
+      "key": "P/North",
+      "name": "Assistant Commissioner, P/North Ward",
+      "email": "ac.pn@mcgm.gov.in",
+      "active": false,
+      "source_url": "https://portal.mcgm.gov.in/irj/go/km/docs/documents/MCGM%20Department%20List/IT%20Department/Email%20IDs%20for%20MCGM%20employees/Executive%20feature%20mcgm%20email%20users.pdf"
+    },
+    {
+      "authority_slug": "bmc-mumbai",
+      "kind": "ward",
+      "key": "P/South",
+      "name": "Assistant Commissioner, P/South Ward",
+      "email": "ac.ps@mcgm.gov.in",
+      "active": false,
+      "source_url": "https://portal.mcgm.gov.in/irj/go/km/docs/documents/MCGM%20Department%20List/IT%20Department/Email%20IDs%20for%20MCGM%20employees/Executive%20feature%20mcgm%20email%20users.pdf"
+    },
+    {
+      "authority_slug": "bmc-mumbai",
+      "kind": "ward",
+      "key": "R/Central",
+      "name": "Assistant Commissioner, R/Central Ward",
+      "email": "ac.rc@mcgm.gov.in",
+      "active": false,
+      "source_url": "https://portal.mcgm.gov.in/irj/go/km/docs/documents/MCGM%20Department%20List/IT%20Department/Email%20IDs%20for%20MCGM%20employees/Executive%20feature%20mcgm%20email%20users.pdf"
+    },
+    {
+      "authority_slug": "bmc-mumbai",
+      "kind": "ward",
+      "key": "R/North",
+      "name": "Assistant Commissioner, R/North Ward",
+      "email": "ac.rn@mcgm.gov.in",
+      "active": false,
+      "source_url": "https://portal.mcgm.gov.in/irj/go/km/docs/documents/MCGM%20Department%20List/IT%20Department/Email%20IDs%20for%20MCGM%20employees/Executive%20feature%20mcgm%20email%20users.pdf"
+    },
+    {
+      "authority_slug": "bmc-mumbai",
+      "kind": "ward",
+      "key": "R/South",
+      "name": "Assistant Commissioner, R/South Ward",
+      "email": "ac.rs@mcgm.gov.in",
+      "active": false,
+      "source_url": "https://portal.mcgm.gov.in/irj/go/km/docs/documents/MCGM%20Department%20List/IT%20Department/Email%20IDs%20for%20MCGM%20employees/Executive%20feature%20mcgm%20email%20users.pdf"
+    },
+    {
+      "authority_slug": "bmc-mumbai",
+      "kind": "ward",
+      "key": "S",
+      "name": "Assistant Commissioner, S Ward",
+      "email": "ac.s@mcgm.gov.in",
+      "active": false,
+      "source_url": "https://portal.mcgm.gov.in/irj/go/km/docs/documents/MCGM%20Department%20List/IT%20Department/Email%20IDs%20for%20MCGM%20employees/Executive%20feature%20mcgm%20email%20users.pdf"
+    },
+    {
+      "authority_slug": "bmc-mumbai",
+      "kind": "ward",
+      "key": "T",
+      "name": "Assistant Commissioner, T Ward",
+      "email": "ac.t@mcgm.gov.in",
+      "active": false,
+      "source_url": "https://portal.mcgm.gov.in/irj/go/km/docs/documents/MCGM%20Department%20List/IT%20Department/Email%20IDs%20for%20MCGM%20employees/Executive%20feature%20mcgm%20email%20users.pdf"
+    }
+  ]
+}

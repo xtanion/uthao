@@ -1,10 +1,11 @@
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Camera, Check, ChevronRight, CircleCheck, MapPin, X } from 'lucide-react-native';
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
-  Alert, Dimensions, Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View,
+  Alert, Animated, Dimensions, Easing, Image, Modal, Pressable, ScrollView, StyleSheet, Text,
+  TextInput, View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useServices } from '../src/data/context';
 import { CATEGORIES, MAX_PHOTOS, SEVERITIES, categoryLabel, severityLabel } from '../src/domain/issue';
 import type { Category, Duplicate, GeoPoint, Severity } from '../src/domain/issue';
@@ -27,20 +28,35 @@ const titleFrom = (caption: string) => {
   return `${text.slice(0, cut > 20 ? cut : 137).trimEnd()}…`;
 };
 
+/** The home screen takes the photos before opening this, and hands them over
+ *  as a JSON array in the route params. */
+const parseShots = (raw: string | undefined): string[] => {
+  try {
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed.filter((u) => typeof u === 'string').slice(0, MAX_PHOTOS) : [];
+  } catch {
+    return [];
+  }
+};
+
 export default function Report() {
   const tone = useTone();
   const router = useRouter();
   const { auth, issues, location, photos } = useServices();
+  const params = useLocalSearchParams<{ photos?: string }>();
   const [caption, setCaption] = useState('');
   const [category, setCategory] = useState<Category>('pothole_road');
   const [severity, setSeverity] = useState<Severity>('medium');
-  const [attached, setAttached] = useState<string[]>([]);
+  const [attached, setAttached] = useState<string[]>(() => parseShots(params.photos));
   /* Minted once per composer, not per tap. A failed publish is retried with
    * the same id, which is what lets the backend recognise the retry instead
    * of filing a second report. */
   const [reportId] = useState(uuid);
   const [busy, setBusy] = useState(false);
-  const [sheet, setSheet] = useState<null | 'category' | 'severity'>(null);
+  /* Kept after the sheet closes so its contents do not swap to the other
+   * list while it is still sliding away. */
+  const [sheet, setSheet] = useState<'category' | 'severity'>('category');
+  const [sheetOpen, setSheetOpen] = useState(false);
   /* Held between the duplicate check and whatever the person chooses, so
    * neither branch has to ask the device for a fix a second time. */
   const [nearby, setNearby] = useState<{ point: GeoPoint; candidates: Duplicate[] } | null>(null);
@@ -179,6 +195,7 @@ export default function Report() {
         </Pressable>
 
         <TextInput
+          autoFocus={attached.length > 0}
           style={[styles.caption, { color: tone.ink }]}
           value={caption}
           onChangeText={setCaption}
@@ -193,7 +210,10 @@ export default function Report() {
           leading={<CategoryGlyph category={category} size={20} color={tone.ink} />}
           label="Category"
           value={categoryLabel[category]}
-          onPress={() => setSheet('category')}
+          onPress={() => {
+            setSheet('category');
+            setSheetOpen(true);
+          }}
         />
         <Divider />
         <Row
@@ -207,7 +227,10 @@ export default function Report() {
           }
           label="Severity"
           value={severityLabel[severity]}
-          onPress={() => setSheet('severity')}
+          onPress={() => {
+            setSheet('severity');
+            setSheetOpen(true);
+          }}
         />
         <Divider />
         <Row
@@ -233,8 +256,8 @@ export default function Report() {
       />
 
       <Sheet
-        visible={sheet !== null}
-        onClose={() => setSheet(null)}
+        visible={sheetOpen}
+        onClose={() => setSheetOpen(false)}
         title={sheet === 'severity' ? 'Severity' : 'Category'}
         options={
           sheet === 'severity'
@@ -244,7 +267,7 @@ export default function Report() {
         onPick={(value) => {
           if (sheet === 'severity') setSeverity(value as Severity);
           else setCategory(value as Category);
-          setSheet(null);
+          setSheetOpen(false);
         }}
       />
     </SafeAreaView>
@@ -281,22 +304,56 @@ function Sheet({
   onPick: (value: string) => void;
 }) {
   const tone = useTone();
+  const insets = useSafeAreaInsets();
+  const [mounted, setMounted] = useState(visible);
+  const progress = useRef(new Animated.Value(0)).current;
+
+  // The Modal's own slide moves the dimmed backdrop up with the sheet, so it
+  // stays unanimated and the backdrop fades while only the sheet travels.
+  useEffect(() => {
+    if (visible) {
+      setMounted(true);
+      Animated.spring(progress, {
+        toValue: 1, damping: 26, stiffness: 260, mass: 0.9, useNativeDriver: true,
+      }).start();
+    } else {
+      Animated.timing(progress, {
+        toValue: 0, duration: 180, easing: Easing.in(Easing.cubic), useNativeDriver: true,
+      }).start(({ finished }) => finished && setMounted(false));
+    }
+  }, [visible, progress]);
+
+  const travel = Dimensions.get('window').height * 0.6;
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose} />
-      <View style={[styles.sheet, { backgroundColor: tone.bg }]}>
+    <Modal visible={mounted} transparent animationType="none" statusBarTranslucent onRequestClose={onClose}>
+      <Animated.View style={[StyleSheet.absoluteFill, styles.backdrop, { opacity: progress }]}>
+        <Pressable style={{ flex: 1 }} onPress={onClose} />
+      </Animated.View>
+      <Animated.View
+        style={[
+          styles.sheet,
+          {
+            backgroundColor: tone.bg,
+            paddingBottom: insets.bottom + 8,
+            transform: [{ translateY: progress.interpolate({ inputRange: [0, 1], outputRange: [travel, 0] }) }],
+          },
+        ]}>
+        <View style={[styles.handle, { backgroundColor: tone.hairline }]} />
         <Text style={[t.display(16, '600'), { color: tone.ink, textAlign: 'center', marginBottom: 8 }]}>
           {title}
         </Text>
-        <ScrollView>
+        <ScrollView bounces={false} style={{ flexShrink: 1 }} contentContainerStyle={{ paddingBottom: 4 }}>
           {options.map((option) => (
-            <Pressable key={option.value} style={styles.row} onPress={() => onPick(option.value)}>
+            <Pressable
+              key={option.value}
+              style={({ pressed }) => [styles.row, pressed && { backgroundColor: tone.surface }]}
+              onPress={() => onPick(option.value)}>
               <Text style={[t.body(16), { color: tone.ink, flex: 1 }]}>{option.label}</Text>
               {option.selected && <Check size={18} color={tone.accentDeep} />}
             </Pressable>
           ))}
         </ScrollView>
-      </View>
+      </Animated.View>
     </Modal>
   );
 }
@@ -318,6 +375,10 @@ const styles = StyleSheet.create({
   },
   row: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: metric.gutter, paddingVertical: 15 },
   dot: { width: 10, height: 10, borderRadius: 5 },
-  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)' },
-  sheet: { maxHeight: '60%', paddingTop: 14, borderTopLeftRadius: 18, borderTopRightRadius: 18 },
+  backdrop: { backgroundColor: 'rgba(0,0,0,0.4)' },
+  sheet: {
+    position: 'absolute', left: 0, right: 0, bottom: 0, maxHeight: '60%',
+    paddingTop: 8, borderTopLeftRadius: 18, borderTopRightRadius: 18,
+  },
+  handle: { alignSelf: 'center', width: 36, height: 5, borderRadius: 3, marginBottom: 10 },
 });

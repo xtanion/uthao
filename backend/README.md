@@ -127,7 +127,7 @@ engineer, and choosing between them needs ward geometry rather than a
 city-sized box, so they are carried inactive until it lands.
 
 `AI_ROUTING=false` turns the model off and leaves the static
-category-to-department mapping doing the work. No `ANTHROPIC_API_KEY` does the
+category-to-department mapping doing the work. No `OPENAI_API_KEY` does the
 same thing.
 
 ```bash
@@ -399,7 +399,7 @@ valid "today" for anyone choosing it after half past six in the evening.
 **Raising a report with an authority.** Two swappable pieces, split because
 they fail differently. A *drafter* turns a report and what people said about it
 into a letter; a *channel* delivers it and can be asked about it later. With no
-`ANTHROPIC_API_KEY` there is no letter and nothing happens. With no channel
+`OPENAI_API_KEY` there is no letter and nothing happens. With no channel
 configured the letter is written, stored, and readable — but nothing is claimed
 to have been sent, and **the report's status does not move**. Saying a complaint
 reached a municipal body when it did not is the single failure `authority.py`
@@ -457,7 +457,7 @@ returns None, because an emailed complaint has no endpoint to poll. What comes
 back arrives at `POST /webhooks/inbound-mail`, HMAC-signed with
 `INBOUND_MAIL_SECRET` — the address is unguessable but the endpoint is not, and
 without a signature anyone who learned an address could post a fake resolution
-and close a real problem. `ClaudeReplyReader` turns the reply into one of
+and close a real problem. `OpenAIReplyReader` turns the reply into one of
 `acknowledged` / `in_progress` / `claimed` / `none`, defaulting to `none`,
 because saying work is finished when the reply does not say so closes a problem
 that is still there. Anything unclassifiable is still stored and still shown: a
@@ -470,8 +470,8 @@ complaint.
 report should stop claiming to have reached anybody.
 
 **Summaries.** `app/summarize.py` follows the `otp.set_sender` shape: an
-interface, a Claude implementation, and a no-op default. With no
-`ANTHROPIC_API_KEY` the field is null and the app hides the block, so a checkout
+interface, an OpenAI implementation, and a no-op default. With no
+`OPENAI_API_KEY` the field is null and the app hides the block, so a checkout
 still runs with no account anywhere.
 
 Generation happens in a `BackgroundTasks` callback, after the response has gone

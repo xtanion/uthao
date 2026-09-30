@@ -57,7 +57,7 @@ async def test_creating_a_report_returns_the_contract_shape(client, sender):
     assert body["confirmed_at"] is None
     assert body["contributions_open_at"] is None
     assert body["ai_summary"] is None
-    assert body["reporter"]["display_name"] == "Resident 3210"
+    assert body["reporter"]["display_name"] == "Hooman 3210"
     assert body["reporter"]["id"]
     assert body["created_at"].endswith("Z")
 

@@ -21,8 +21,9 @@ from dataclasses import dataclass
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .authority import AuthorityContact, contact_from, desks_for, authority_row_for
-from .config import Settings, get_settings
+from .config import get_settings
 from .enums import Category, ContactPointKind
+from .llm import complete
 
 log = logging.getLogger(__name__)
 
@@ -77,13 +78,7 @@ class NullRouter(Router):
         return None, None
 
 
-class ClaudeRouter(Router):
-    def __init__(self, settings: Settings) -> None:
-        from anthropic import AsyncAnthropic
-
-        self._client = AsyncAnthropic(api_key=settings.anthropic_api_key)
-        self._model = settings.ai_summary_model
-
+class OpenAIRouter(Router):
     async def route(
         self, title: str, description: str, reported: Category, desks: list[tuple[str, str]]
     ) -> tuple[Category | None, str | None]:
@@ -95,19 +90,9 @@ class ClaudeRouter(Router):
             f"Title: {title}\n"
             f"Description: {description[:2000]}"
         )
-        response = await self._client.messages.create(
-            model=self._model,
-            max_tokens=200,
-            system=SYSTEM,
-            # Low: this is a classification against a closed list, not writing.
-            output_config={"effort": "low"},
-            messages=[{"role": "user", "content": prompt}],
-        )
-        if response.stop_reason == "refusal":
+        text = await complete(SYSTEM, prompt, max_output_tokens=200, purpose="routing")
+        if text is None:
             return None, None
-        text = "".join(
-            block.text for block in response.content if block.type == "text"
-        ).strip()
         return _parse(text, {key for key, _ in desks})
 
 
@@ -148,7 +133,7 @@ def get_router() -> Router:
     if _router is None:
         settings = get_settings()
         if settings.ai_routing_configured:
-            _router = ClaudeRouter(settings)
+            _router = OpenAIRouter()
         else:
             log.info("routing is not configured; reported categories stand")
             _router = NullRouter()

@@ -4,6 +4,7 @@ import {
   focusManager,
   onlineManager,
 } from '@tanstack/react-query';
+import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect } from 'react';
@@ -22,6 +23,9 @@ const client = new QueryClient({
 
 export default function RootLayout() {
   const scheme = useColorScheme();
+  const [fontsLoaded, fontError] = useFonts({
+    'GeistPixel-Square': require('../assets/fonts/GeistPixel-Square.ttf'),
+  });
 
   // React Query listens for window focus, which a native app never fires.
   // Without this, a feed left open past the signed-URL expiry comes back to
@@ -48,6 +52,8 @@ export default function RootLayout() {
       .catch(() => onlineManager.setOnline(true));
     return () => subscription.remove();
   }, []);
+
+  if (!fontsLoaded && !fontError) return null;
 
   return (
     <SafeAreaProvider>
@@ -80,10 +86,7 @@ function Routes() {
       <Stack.Screen name="report" options={{ headerShown: false, presentation: 'modal' }} />
       <Stack.Screen name="issues/[id]" options={{ title: '' }} />
       <Stack.Screen name="users/[id]" options={{ title: '' }} />
-      <Stack.Screen
-        name="profile/edit"
-        options={{ title: 'Your profile', presentation: 'modal' }}
-      />
+      <Stack.Screen name="profile/edit" options={{ title: 'Your profile' }} />
     </Stack>
   );
 }

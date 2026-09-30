@@ -44,6 +44,7 @@ from .schemas import (
 )
 from .storage import ObjectStore
 from .summarize import NullSummarizer, SummaryRequest, get_summarizer
+from .titles import NullTitler, TitleRequest, get_titler
 
 
 log = logging.getLogger(__name__)
@@ -1006,6 +1007,50 @@ async def refresh_summary(issue_id: str) -> None:
         log.exception("could not summarize issue %s", issue_id)
 
 
+def title_is_derived(title: str, description: str) -> bool:
+    """Whether the title is just the caption clipped to fit, which is what the
+    app sends. A title somebody wrote on its own is theirs and is left alone."""
+    stem = title.strip().removesuffix("…").rstrip()
+    return bool(stem) and description.strip().startswith(stem)
+
+
+async def refresh_title(issue_id: str) -> None:
+    """Replace a clipped-caption title with a written headline.
+
+    Runs after the response, like the summary. It only swaps a title that is
+    still the one the report was filed with, so nothing a person changed in the
+    meantime is overwritten, and any failure leaves the clipped caption.
+    """
+    from .db import sessionmaker
+
+    titler = get_titler()
+    if isinstance(titler, NullTitler):
+        return
+
+    try:
+        async with sessionmaker()() as session:
+            issue = await session.get(Issue, issue_id)
+            if issue is None or issue.status in HIDDEN_STATUSES:
+                return
+            original = issue.title
+            title = await titler.title(
+                TitleRequest(
+                    description=issue.description,
+                    category=issue.category.value,
+                    locality=issue.locality,
+                )
+            )
+            if title is None or title == original:
+                return
+            await session.refresh(issue)
+            if issue.title != original:
+                return
+            issue.title = title
+            await session.commit()
+    except Exception:
+        log.exception("could not write a title for issue %s", issue_id)
+
+
 def summary_is_due(issue: Issue) -> bool:
     """Whether the summary is worth rewriting right now.
 
@@ -1229,7 +1274,7 @@ async def vote_fix_date(
     return await fix_dates(session, issue=issue, viewer=user)
 
 
-DELETED_NAME = "Removed resident"
+DELETED_NAME = "Former hooman"
 
 
 async def delete_account(

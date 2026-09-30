@@ -59,7 +59,7 @@ async def test_the_phone_number_is_gone_and_reusable(client, sender):
     # Null, not a tombstone: a tombstone has to be unique, does not fit a
     # phone-sized column, and leaves something number-shaped behind.
     assert row.phone is None
-    assert row.display_name == "Removed resident"
+    assert row.display_name == "Former hooman"
     assert row.deleted_at is not None
 
     # And the number can start a fresh account, which it could not if the row
@@ -97,7 +97,7 @@ async def test_their_words_survive_credited_to_nobody(client, sender):
     thread = (await client.get(f"/issues/{issue_id}/supports")).json()
     row = thread["items"][0]
     assert row["body"] == "A branch is stuck in it."
-    assert row["author"]["display_name"] == "Removed resident"
+    assert row["author"]["display_name"] == "Former hooman"
 
 
 async def test_their_own_reports_stay(client, sender):
@@ -109,7 +109,7 @@ async def test_their_own_reports_stay(client, sender):
 
     detail = await client.get(f"/issues/{issue_id}")
     assert detail.status_code == 200
-    assert detail.json()["reporter"]["display_name"] == "Removed resident"
+    assert detail.json()["reporter"]["display_name"] == "Former hooman"
 
 
 async def test_their_notification_feed_is_destroyed(client, sender):

@@ -13,7 +13,7 @@ export async function shareIssue(issue: Issue) {
   const where = issue.locality ? ` in ${issue.locality}` : '';
   const backing =
     issue.confirmation_count > 0
-      ? `\n${issue.confirmation_count} ${issue.confirmation_count === 1 ? 'resident has' : 'residents have'} independently confirmed it.`
+      ? `\n${issue.confirmation_count} ${issue.confirmation_count === 1 ? 'hooman has' : 'hoomans have'} independently confirmed it.`
       : '';
 
   const message = [

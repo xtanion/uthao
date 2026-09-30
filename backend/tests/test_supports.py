@@ -152,8 +152,8 @@ async def test_the_gallery_credits_every_photo(client, sender):
     assert response.status_code == 200
     assert len(photos) == 2
     assert [p["from_report"] for p in photos] == [True, False], "report first"
-    assert photos[0]["contributor"]["display_name"] == "Resident 3210"
-    assert photos[1]["contributor"]["display_name"] == "Resident 0001"
+    assert photos[0]["contributor"]["display_name"] == "Hooman 3210"
+    assert photos[1]["contributor"]["display_name"] == "Hooman 0001"
     assert photos[0]["contributor"]["id"] != photos[1]["contributor"]["id"]
     assert all(p["url"] and p["thumbnail_url"] for p in photos)
 
@@ -191,7 +191,7 @@ async def test_the_thread_shows_words_and_photos_together(client, sender):
     row = page["items"][0]
     assert row["body"] == "Look at this."
     assert len(row["photos"]) == 2
-    assert row["author"]["display_name"] == "Resident 0001"
+    assert row["author"]["display_name"] == "Hooman 0001"
     assert row["author_is_reporter"] is False
     assert row["mine"] is True
 
@@ -232,7 +232,7 @@ async def test_supporting_notifies_the_reporter_once(client, sender):
     feed = await client.get("/notifications", headers=auth(reporter))
     rows = feed.json()["items"]
     assert [r["type"] for r in rows] == ["support_received"], "one act, one telling"
-    assert rows[0]["actor_name"] == "Resident 0001"
+    assert rows[0]["actor_name"] == "Hooman 0001"
 
 
 async def test_supporting_your_own_issue_notifies_nobody(client, sender):

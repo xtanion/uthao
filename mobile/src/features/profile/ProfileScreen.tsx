@@ -157,7 +157,7 @@ function Header({ profile, isMe }: { profile: Profile; isMe: boolean }) {
             {profile.display_name}
           </Text>
           <Text style={[t.meta(11, '500', 0.4), { color: tone.chalk, marginTop: 5 }]}>
-            {isMe ? 'You' : 'Resident'}
+            {isMe ? 'You' : 'Hooman'}
             {joined ? `  ·  Joined ${joined}` : ''}
           </Text>
         </View>

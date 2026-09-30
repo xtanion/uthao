@@ -13,6 +13,7 @@ import type {
 } from '../domain/issue';
 import type { NotificationPage } from '../domain/notification';
 import type { Escalation } from '../domain/escalation';
+import type { Period, Stats, StatsAreaOption, StatsContributors, StatsScope } from '../domain/stats';
 import type { Account, Profile } from '../domain/profile';
 
 export const PAGE_SIZE = 20;
@@ -67,6 +68,9 @@ export interface IssuesRepository {
   mine(cursor?: string | null): Promise<Page>;
   /** The letter raised with the authority. Null until one has been. */
   escalation(id: string): Promise<Escalation | null>;
+  stats(scope: StatsScope): Promise<Stats>;
+  statsAreas(): Promise<StatsAreaOption[]>;
+  topContributors(period: Period, scope: StatsScope): Promise<StatsContributors>;
 }
 
 export interface UsersRepository {

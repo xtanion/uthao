@@ -1,5 +1,6 @@
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Category, GeoPoint, Severity, Status, SupportDraft } from '../domain/issue';
+import type { Period, StatsScope } from '../domain/stats';
 import { useServices } from './context';
 import { SEARCH_RADIUS_M } from './repository';
 
@@ -302,5 +303,43 @@ export function useUserSupports(userId: string | null) {
     queryFn: ({ pageParam }) => users.supports(userId as string, pageParam),
     getNextPageParam: (last) => last.next_cursor,
     enabled: Boolean(userId),
+  });
+}
+
+/** Rounded so a GPS fix drifting a few metres does not refetch the page. */
+const scopeKey = ({ area, point }: StatsScope) =>
+  area
+    ? [area]
+    : point
+      ? [Number(point.latitude.toFixed(2)), Number(point.longitude.toFixed(2))]
+      : [null];
+
+export function useStats(scope: StatsScope, enabled: boolean) {
+  const { issues } = useServices();
+  return useQuery({
+    queryKey: ['stats', 'page', ...scopeKey(scope)],
+    queryFn: () => issues.stats(scope),
+    staleTime: 5 * 60_000,
+    placeholderData: keepPreviousData,
+    enabled,
+  });
+}
+
+export function useStatsAreas() {
+  const { issues } = useServices();
+  return useQuery({
+    queryKey: ['stats', 'areas'],
+    queryFn: () => issues.statsAreas(),
+    staleTime: 30 * 60_000,
+  });
+}
+
+export function useTopContributors(period: Period, scope: StatsScope) {
+  const { issues } = useServices();
+  return useQuery({
+    queryKey: ['stats', 'contributors', period, ...scopeKey(scope)],
+    queryFn: () => issues.topContributors(period, scope),
+    staleTime: 5 * 60_000,
+    placeholderData: keepPreviousData,
   });
 }

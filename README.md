@@ -1,6 +1,6 @@
 # fihy
 
-Fix India, Heck Yeah — report and independently confirm public civic issues.
+Report, Confirm & Get it Fixed. FIHY gives you a platform to share you local issues with your respective authorities. It also lets you build community to work on an issue independently.
 
 ## Layout
 

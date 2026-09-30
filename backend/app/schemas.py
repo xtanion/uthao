@@ -296,3 +296,79 @@ class ProfileOut(BaseModel):
     @field_serializer("joined_at")
     def _joined_at(self, value: datetime) -> str:
         return rfc3339(value)
+
+
+class StatsTotals(BaseModel):
+    reported: int
+    confirmed: int
+    raised: int
+    resolved: int
+    photos: int
+    contributors: int
+    emails_sent: int
+
+
+class StatsWeek(BaseModel):
+    week_start: date
+    reported: int
+    resolved: int
+
+
+class StatsCategory(BaseModel):
+    category: Category
+    total: int
+    resolved: int
+
+
+class StatsPoint(BaseModel):
+    latitude: float
+    longitude: float
+    resolved: bool
+
+
+class StatsArea(BaseModel):
+    slug: str
+    city: str
+    min_latitude: float
+    max_latitude: float
+    min_longitude: float
+    max_longitude: float
+
+
+class StatsAreaOption(BaseModel):
+    slug: str
+    city: str
+    reports: int
+
+
+class StatsContributor(BaseModel):
+    id: str
+    display_name: str
+    avatar_url: str | None
+    reputation: int
+    reports: int
+    resolutions: int
+
+
+class StatsOut(BaseModel):
+    area: StatsArea | None
+    totals: StatsTotals
+    weeks: list[StatsWeek]
+    categories: list[StatsCategory]
+    points: list[StatsPoint]
+    generated_at: datetime
+
+    @field_serializer("generated_at")
+    def _generated_at(self, value: datetime) -> str:
+        return rfc3339(value)
+
+
+class StatsContributorsOut(BaseModel):
+    period: str
+    since: datetime
+    area: StatsArea | None
+    items: list[StatsContributor]
+
+    @field_serializer("since")
+    def _since(self, value: datetime) -> str:
+        return rfc3339(value)

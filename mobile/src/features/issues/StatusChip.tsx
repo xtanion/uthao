@@ -14,7 +14,9 @@ const ink = (tone: Tones, of: StatusTone): string => {
     case 'warn':
       return tone.hazard;
     case 'progress':
-      return tone.ink;
+      return tone.progress;
+    case 'neutral':
+      return tone.pending;
     default:
       return tone.chalk;
   }
@@ -22,18 +24,15 @@ const ink = (tone: Tones, of: StatusTone): string => {
 
 /**
  * Status where there is no room for words: a feed card, a row in the duplicate
- * sheet. The tone carries the meaning, and the label goes to screen readers
- * rather than being dropped.
+ * sheet. One quiet colour for every status, so the glyph's shape carries the
+ * meaning and a list of cards is not a row of traffic lights; the coloured
+ * version is the chip on the report page. The label goes to screen readers.
  */
 export function StatusIcon({ status, size = 19 }: { status: Status; size?: number }) {
   const tone = useTone();
   return (
     <View accessibilityLabel={statusLabel(status)}>
-      <StatusGlyph
-        status={status}
-        size={size}
-        color={ink(tone, STATUS_META[status].tone)}
-      />
+      <StatusGlyph status={status} size={size} color={tone.chalk} />
     </View>
   );
 }

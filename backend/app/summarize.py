@@ -6,7 +6,8 @@ no-op default, so a checkout runs with no API key and the field is simply null.
 import logging
 from dataclasses import dataclass
 
-from .config import Settings, get_settings
+from .config import get_settings
+from .llm import complete
 
 log = logging.getLogger(__name__)
 
@@ -67,35 +68,9 @@ class NullSummarizer(Summarizer):
         return None
 
 
-class ClaudeSummarizer(Summarizer):
-    def __init__(self, settings: Settings) -> None:
-        from anthropic import AsyncAnthropic
-
-        self._client = AsyncAnthropic(api_key=settings.anthropic_api_key)
-        self._model = settings.ai_summary_model
-
+class OpenAISummarizer(Summarizer):
     async def summarize(self, request: SummaryRequest) -> str | None:
-        response = await self._client.messages.create(
-            model=self._model,
-            max_tokens=2000,
-            system=SYSTEM,
-            # A short factual restatement of text already in hand. Low effort
-            # is the right setting, and leaving thinking on avoids the
-            # tag-leakage that disabling it invites.
-            output_config={"effort": "low"},
-            messages=[{"role": "user", "content": render(request)}],
-        )
-        if response.stop_reason == "refusal":
-            log.warning(
-                "summary refused for %r (%s)",
-                request.title,
-                response.stop_details.category if response.stop_details else None,
-            )
-            return None
-        text = "".join(
-            block.text for block in response.content if block.type == "text"
-        ).strip()
-        return text or None
+        return await complete(SYSTEM, render(request), max_output_tokens=400, purpose="summary")
 
 
 _summarizer: Summarizer | None = None
@@ -106,9 +81,9 @@ def get_summarizer() -> Summarizer:
     if _summarizer is None:
         settings = get_settings()
         if settings.ai_summary_configured:
-            _summarizer = ClaudeSummarizer(settings)
+            _summarizer = OpenAISummarizer()
         else:
-            log.info("no ANTHROPIC_API_KEY; issue summaries are off")
+            log.info("no OPENAI_API_KEY; issue summaries are off")
             _summarizer = NullSummarizer()
     return _summarizer
 
