@@ -30,7 +30,7 @@ export function AreaPicker({
         accessibilityLabel={`Area: ${current?.city ?? 'India'}. Change area`}
         style={({ pressed }) => [styles.trigger, { opacity: pressed ? 0.6 : 1 }]}>
         <MapPin size={15} color={tone.chalk} />
-        <Text style={[t.display(15, '700'), { color: tone.chalk }]}>{current?.city ?? 'India'}</Text>
+        <Text style={[t.display(15, '500'), { color: tone.chalk }]}>{current?.city ?? 'India'}</Text>
         <ChevronDown size={16} color={tone.chalk} />
       </Pressable>
 
@@ -40,7 +40,7 @@ export function AreaPicker({
           <View style={styles.grabber}>
             <View style={[styles.grabberBar, { backgroundColor: tone.hairline }]} />
           </View>
-          <Text style={[t.display(20, '700'), styles.head, { color: tone.ink }]}>Choose a city</Text>
+          <Text style={[t.display(20, '600'), styles.head, { color: tone.ink }]}>Choose a city</Text>
           {areas.isPending ? (
             <ActivityIndicator color={tone.accentDeep} style={{ paddingVertical: 24 }} />
           ) : (
@@ -59,7 +59,7 @@ export function AreaPicker({
                       { borderBottomColor: tone.hairline, opacity: pressed ? 0.6 : 1 },
                     ]}>
                     <View style={{ flex: 1 }}>
-                      <Text style={[t.display(16, on ? '700' : '500'), { color: tone.ink }]}>
+                      <Text style={[t.display(16, on ? '600' : '400'), { color: tone.ink }]}>
                         {option.city}
                       </Text>
                       <Text style={[t.meta(12, '500', 0), { color: tone.chalk, marginTop: 2 }]}>

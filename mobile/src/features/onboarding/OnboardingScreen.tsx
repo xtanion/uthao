@@ -1,4 +1,5 @@
 import { useRouter } from 'expo-router';
+import { ArrowUp, Eye } from 'lucide-react-native';
 import React, { useCallback, useRef, useState } from 'react';
 import {
   Dimensions,
@@ -14,39 +15,88 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useServices } from '../../data/context';
 import { markOnboardingSeen } from '../../data/startup';
 import { metric, type as t, useTone } from '../../theme/tokens';
-import { ConfirmArt, EscalateArt, LocationArt, ReportArt } from './art';
+import { ActionsArt, ConfirmArt, EscalateArt, LocationArt, ReportArt, hue } from './art';
 
 type Slide = {
   key: string;
   art: () => React.ReactElement;
+  eyebrow: string;
+  colour: string;
   title: string;
-  body: string;
+  body: string | (() => React.ReactElement);
 };
+
+function ActionsLegend() {
+  const tone = useTone();
+  const rows = [
+    {
+      icon: <ArrowUp size={16} color={tone.accentDeep} />,
+      wash: `${tone.accent}2e`,
+      name: 'Support',
+      text: 'Open a report and add what you saw, a line or a photo. The arrow counts everyone who did.',
+    },
+    {
+      icon: <Eye size={16} color={hue.sky} />,
+      wash: `${hue.sky}2e`,
+      name: 'Seen it',
+      text: 'One tap to say you have walked past it too. Tap again to take it back.',
+    },
+  ];
+  return (
+    <View style={{ marginTop: 14, gap: 14 }}>
+      {rows.map((row) => (
+        <View key={row.name} style={styles.legendRow}>
+          <View style={[styles.legendIcon, { backgroundColor: row.wash }]}>{row.icon}</View>
+          <View style={{ flex: 1, marginLeft: 12 }}>
+            <Text style={[t.display(15, '600'), { color: tone.ink }]}>{row.name}</Text>
+            <Text style={[t.body(14), { color: tone.chalk, marginTop: 2 }]}>{row.text}</Text>
+          </View>
+        </View>
+      ))}
+    </View>
+  );
+}
 
 const SLIDES: Slide[] = [
   {
     key: 'report',
     art: ReportArt,
-    title: 'Report what is broken',
-    body: 'A missing manhole cover, a dark street, a drain that floods every monsoon. Photograph it, and it is on the map for your neighbours.',
+    eyebrow: 'Report',
+    colour: hue.coral,
+    title: 'See something broken? Snap it.',
+    body: 'A missing manhole cover, a dark street, a drain that floods every monsoon. One photo and a line, and it is on the map for everyone nearby.',
+  },
+  {
+    key: 'actions',
+    art: ActionsArt,
+    eyebrow: 'On every report',
+    colour: hue.sky,
+    title: 'Two ways to back it up',
+    body: ActionsLegend,
   },
   {
     key: 'confirm',
     art: ConfirmArt,
-    title: 'Neighbours confirm it',
-    body: 'Anyone can back a report. But it takes photographs from two other people, standing in the same place, before it counts as corroborated. That is what makes it hard to ignore.',
+    eyebrow: 'Confirm',
+    colour: hue.violet,
+    title: 'Photos make it count',
+    body: 'When two other people photograph the same spot, the report is confirmed. Proof from several neighbours is much harder to ignore.',
   },
   {
     key: 'escalate',
     art: EscalateArt,
+    eyebrow: 'Escalate',
+    colour: hue.mint,
     title: 'Then it goes to the ward',
-    body: 'Confirmed reports are raised with the authority responsible for them, and you can read the letter that went out on your behalf.',
+    body: 'Confirmed reports are sent to the authority responsible, and you can read the letter that went out on your behalf. Follow it until it is fixed.',
   },
   {
     key: 'location',
     art: LocationArt,
+    eyebrow: 'Nearby',
+    colour: hue.amber,
     title: 'Start with what is near you',
-    body: 'Your location places a report accurately and shows what has already been flagged nearby. It is only sent with a report you choose to file.',
+    body: 'Your location places a report accurately and shows what has already been flagged around you. It is only shared with a report you choose to file.',
   },
 ];
 
@@ -99,7 +149,7 @@ export function OnboardingScreen() {
         <View style={styles.top}>
           {!last && (
             <Pressable onPress={finish} hitSlop={10}>
-              <Text style={[t.meta(12, '600', 0.3), { color: tone.chalk }]}>Skip</Text>
+              <Text style={[t.meta(13, '500', 0.2), { color: tone.chalk }]}>Skip</Text>
             </Pressable>
           )}
         </View>
@@ -116,10 +166,15 @@ export function OnboardingScreen() {
         {SLIDES.map((slide) => (
           <View key={slide.key} style={[styles.slide, { width }]}>
             <View style={styles.art}>{slide.art()}</View>
-            <Text style={[t.display(29, '700'), { color: tone.ink }]}>{slide.title}</Text>
-            <Text style={[t.body(16), { color: tone.chalk, marginTop: 12 }]}>
-              {slide.body}
+            <Text style={[t.meta(12, '600', 1), styles.eyebrow, { color: slide.colour }]}>
+              {slide.eyebrow}
             </Text>
+            <Text style={[t.display(26, '600'), { color: tone.ink }]}>{slide.title}</Text>
+            {typeof slide.body === 'string' ? (
+              <Text style={[t.body(15.5), { color: tone.chalk, marginTop: 10 }]}>{slide.body}</Text>
+            ) : (
+              slide.body()
+            )}
           </View>
         ))}
       </ScrollView>
@@ -133,7 +188,7 @@ export function OnboardingScreen() {
                 style={[
                   styles.dot,
                   {
-                    backgroundColor: i === index ? tone.accent : `${tone.ink}22`,
+                    backgroundColor: i === index ? SLIDES[index].colour : `${tone.ink}22`,
                     width: i === index ? 20 : 7,
                   },
                 ]}
@@ -145,14 +200,14 @@ export function OnboardingScreen() {
             onPress={advance}
             disabled={busy}
             style={[styles.cta, { backgroundColor: tone.accent, opacity: busy ? 0.6 : 1 }]}>
-            <Text style={[t.display(16, '600'), { color: '#000' }]}>
+            <Text style={[t.display(16, '500'), { color: '#000' }]}>
               {last ? (busy ? 'One moment…' : 'Enable location') : 'Next'}
             </Text>
           </Pressable>
 
           {last && (
             <Pressable onPress={finish} hitSlop={8} style={styles.later}>
-              <Text style={[t.meta(12, '600', 0.3), { color: tone.chalk }]}>Not now</Text>
+              <Text style={[t.meta(13, '500', 0.2), { color: tone.chalk }]}>Not now</Text>
             </Pressable>
           )}
         </View>
@@ -166,8 +221,11 @@ const styles = StyleSheet.create({
     height: 40, paddingHorizontal: metric.gutter,
     alignItems: 'flex-end', justifyContent: 'center',
   },
-  slide: { paddingHorizontal: metric.gutter, justifyContent: 'center' },
-  art: { height: 210, alignItems: 'center', justifyContent: 'center', marginBottom: 34 },
+  slide: { paddingHorizontal: metric.gutter, paddingTop: 8 },
+  art: { marginBottom: 26 },
+  eyebrow: { textTransform: 'uppercase', marginBottom: 8 },
+  legendRow: { flexDirection: 'row', alignItems: 'flex-start' },
+  legendIcon: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
   bottom: { paddingHorizontal: metric.gutter, paddingBottom: 8 },
   dots: { flexDirection: 'row', justifyContent: 'center', marginBottom: 22 },
   dot: { height: 7, borderRadius: 4, marginHorizontal: 3 },

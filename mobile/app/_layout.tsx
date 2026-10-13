@@ -5,21 +5,39 @@ import {
   onlineManager,
 } from '@tanstack/react-query';
 import { useFonts } from 'expo-font';
-import { Stack } from 'expo-router';
+import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
+import type { Theme } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import * as SystemUI from 'expo-system-ui';
 import React, { useEffect } from 'react';
 import * as Network from 'expo-network';
 import { AppState, useColorScheme } from 'react-native';
 import type { AppStateStatus } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ServicesProvider } from '../src/data/context';
-import { useTone } from '../src/theme/tokens';
+import { dark, light, useTone } from '../src/theme/tokens';
+import type { Tones } from '../src/theme/tokens';
 
 /** staleTime sits well inside the ten minutes a signed cover_url lasts, so a
  *  refetch always carries links that still resolve. */
 const client = new QueryClient({
   defaultOptions: { queries: { retry: 1, staleTime: 30_000 } },
 });
+
+const themeFor = (base: Theme, tone: Tones): Theme => ({
+  ...base,
+  colors: {
+    ...base.colors,
+    primary: tone.accentDeep,
+    background: tone.bg,
+    card: tone.bg,
+    text: tone.ink,
+    border: tone.hairline,
+  },
+});
+
+const darkTheme = themeFor(DarkTheme, dark);
+const lightTheme = themeFor(DefaultTheme, light);
 
 export default function RootLayout() {
   const scheme = useColorScheme();
@@ -53,15 +71,24 @@ export default function RootLayout() {
     return () => subscription.remove();
   }, []);
 
+  // The navigation theme decides the native header's interface style, so
+  // without it the iOS glass bar buttons render light in dark mode. The root
+  // view colour is what shows at the corners while a screen slides in.
+  useEffect(() => {
+    void SystemUI.setBackgroundColorAsync(scheme === 'dark' ? dark.bg : light.bg);
+  }, [scheme]);
+
   if (!fontsLoaded && !fontError) return null;
 
   return (
     <SafeAreaProvider>
       <QueryClientProvider client={client}>
-        <ServicesProvider>
-          <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
-          <Routes />
-        </ServicesProvider>
+        <ThemeProvider value={scheme === 'dark' ? darkTheme : lightTheme}>
+          <ServicesProvider>
+            <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
+            <Routes />
+          </ServicesProvider>
+        </ThemeProvider>
       </QueryClientProvider>
     </SafeAreaProvider>
   );

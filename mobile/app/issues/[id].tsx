@@ -130,10 +130,8 @@ export default function IssueDetail() {
     if (requireSignIn()) return;
     if (attached.length >= MAX_PHOTOS) return;
     try {
-      const shots = await camera.captureMany(MAX_PHOTOS - attached.length);
-      if (shots.length) {
-        setAttached((prev) => [...prev, ...shots].slice(0, MAX_PHOTOS));
-      }
+      const shot = await camera.capture();
+      if (shot) setAttached((prev) => [...prev, shot].slice(0, MAX_PHOTOS));
     } catch (e) {
       Alert.alert('Could not add photo', (e as Error).message);
     }
@@ -186,7 +184,10 @@ export default function IssueDetail() {
   };
 
   return (
-    <ScrollView contentContainerStyle={{ padding: metric.gutter, paddingBottom: 48 }}>
+    <ScrollView
+      keyboardShouldPersistTaps="handled"
+      keyboardDismissMode="interactive"
+      contentContainerStyle={{ padding: metric.gutter, paddingBottom: 48 }}>
       <Stack.Screen
         options={{
           headerRight: () => (

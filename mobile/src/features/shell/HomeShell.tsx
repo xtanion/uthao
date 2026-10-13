@@ -6,7 +6,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Defs, LinearGradient, Stop, Circle } from 'react-native-svg';
 import { useServices } from '../../data/context';
 import { useLocation, useProfile, useUnreadCount } from '../../data/queries';
-import { MAX_PHOTOS } from '../../domain/issue';
 import { Centered, LocationFailed, NearbyFeed } from '../issues/NearbyFeed';
 import { MapScreen } from '../issues/MapScreen';
 import { NotificationsScreen } from '../notifications/NotificationsScreen';
@@ -66,9 +65,9 @@ function Shell() {
     if (capturing.current) return;
     capturing.current = true;
     try {
-      const shots = await photos.captureMany(MAX_PHOTOS);
-      if (shots.length) {
-        router.push({ pathname: '/report', params: { photos: JSON.stringify(shots) } });
+      const shot = await photos.capture();
+      if (shot) {
+        router.push({ pathname: '/report', params: { photos: JSON.stringify([shot]) } });
       }
     } catch (e) {
       Alert.alert('Could not open the camera', (e as Error).message);

@@ -108,9 +108,6 @@ export interface LocationService {
 export interface PhotoSource {
   /** Evidence: taken through the app, never chosen from the library. */
   capture(): Promise<string | null>;
-  /** Keeps the camera coming back so several shots are one errand, stopping
-   *  at `limit` or when the person backs out. */
-  captureMany(limit: number): Promise<string[]>;
   /** A profile picture, which is not evidence and may come from the library. */
   pickAvatar(): Promise<string | null>;
 }

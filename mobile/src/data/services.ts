@@ -163,21 +163,6 @@ export class CameraPhotoSource implements PhotoSource {
     return sanitize(result.assets[0].uri);
   }
 
-  /**
-   * expo-image-picker has no burst mode, so this reopens the camera after each
-   * shot. The person stays in the flow instead of tapping back into it, and
-   * cancelling is how they say they are done.
-   */
-  async captureMany(limit: number) {
-    const taken: string[] = [];
-    while (taken.length < limit) {
-      const uri = await this.capture();
-      if (!uri) break;
-      taken.push(uri);
-    }
-    return taken;
-  }
-
   async pickAvatar() {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {

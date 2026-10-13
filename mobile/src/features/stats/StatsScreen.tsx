@@ -105,7 +105,7 @@ function Pills<T extends string>({
             accessibilityRole="button"
             accessibilityState={{ selected: on }}
             style={[styles.period, on && { backgroundColor: tone.bg, borderColor: tone.hairline }]}>
-            <Text style={[t.meta(12, on ? '700' : '600', 0), { color: on ? tone.ink : tone.chalk }]}>
+            <Text style={[t.meta(12, on ? '600' : '500', 0), { color: on ? tone.ink : tone.chalk }]}>
               {label(option)}
             </Text>
           </Pressable>
@@ -119,7 +119,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   const tone = useTone();
   return (
     <View style={styles.section}>
-      <Text style={[t.display(18, '700'), { color: tone.ink }]}>{title}</Text>
+      <Text style={[t.display(18, '600'), { color: tone.ink }]}>{title}</Text>
       <View style={{ marginTop: 14 }}>{children}</View>
     </View>
   );
@@ -134,10 +134,10 @@ function Hero({ stats, onChoose }: { stats: Stats; onChoose: (slug: string) => v
     <View style={styles.hero}>
       <AreaPicker current={stats.area} onChoose={onChoose} />
       <View style={styles.headline}>
-        <Text style={[t.display(64, '800'), { color: tone.ink }]}>
+        <Text style={[t.display(64, '600'), { color: tone.ink }]}>
           {stats.totals.resolved.toLocaleString('en-IN')}
         </Text>
-        <Text style={[t.display(20, '700'), { color: tone.accentDeep }]}>Fixed So Far</Text>
+        <Text style={[t.display(20, '500'), { color: tone.accentDeep }]}>Fixed So Far</Text>
       </View>
     </View>
   );
@@ -156,7 +156,7 @@ function Tiles({ stats }: { stats: Stats }) {
     <View style={[styles.tiles, { borderBottomColor: tone.hairline }]}>
       {tiles.map((tile) => (
         <View key={tile.label} style={[styles.tile, { backgroundColor: tone.surface }]}>
-          <Text style={[t.display(26, '800'), { color: tone.ink }]}>{tile.value}</Text>
+          <Text style={[t.display(26, '600'), { color: tone.ink }]}>{tile.value}</Text>
           <Text style={[t.meta(12, '500', 0), { color: tone.chalk, marginTop: 2 }]}>{tile.label}</Text>
         </View>
       ))}
@@ -229,7 +229,7 @@ function FixMap({
           </MapView>
         </View>
         <View style={[styles.mapCta, { backgroundColor: tone.bg, borderColor: tone.hairline }]}>
-          <Text style={[t.meta(11, '700', 0.2), { color: tone.ink }]}>Open map</Text>
+          <Text style={[t.meta(11, '600', 0.2), { color: tone.ink }]}>Open map</Text>
           <ChevronRight size={14} color={tone.ink} />
         </View>
       </Pressable>
@@ -258,7 +258,7 @@ function Funnel({ stats }: { stats: Stats }) {
           <View key={stage.label} style={styles.stage}>
             <View style={styles.stageHead}>
               <Text style={[t.body(14), { color: tone.ink, flex: 1 }]}>{stage.label}</Text>
-              <Text style={[t.meta(13, '700', 0), { color: tone.ink }]}>
+              <Text style={[t.meta(13, '600', 0), { color: tone.ink }]}>
                 {stage.value.toLocaleString('en-IN')}
               </Text>
               <Text style={[t.meta(12, '500', 0), styles.stageShare, { color: tone.chalk }]}>
@@ -420,7 +420,7 @@ function Contributors({ scope }: { scope: StatsScope }) {
             ]}>
             <Text
               style={[
-                t.display(15, '800'),
+                t.display(15, '600'),
                 styles.rank,
                 { color: i === 0 ? tone.accentDeep : tone.chalk },
               ]}>
@@ -435,7 +435,7 @@ function Contributors({ scope }: { scope: StatsScope }) {
                 {row.reports} {row.reports === 1 ? 'report' : 'reports'} · {row.resolutions} fixed
               </Text>
             </View>
-            <Text style={[t.meta(14, '800', 0), { color: tone.ink }]}>{row.reputation}</Text>
+            <Text style={[t.meta(14, '600', 0), { color: tone.ink }]}>{row.reputation}</Text>
           </Pressable>
         ))}
       </View>
