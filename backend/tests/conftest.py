@@ -30,6 +30,8 @@ def environment(tmp_path_factory) -> None:
             # Out of the way by default; the tests that care set them low.
             "REPORTS_PER_USER_PER_HOUR": "1000",
             "SUPPORTS_PER_USER_PER_HOUR": "1000",
+            # A commit would otherwise start a push run that outlives the test.
+            "PUSH_ENABLED": "false",
         }
     )
 

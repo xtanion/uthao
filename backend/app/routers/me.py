@@ -2,12 +2,12 @@ from typing import Annotated
 
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile, status
 
-from .. import service
+from .. import push, service
 from ..config import get_settings
 from ..cursor import InvalidCursor, TimeCursor
 from ..deps import CurrentUser, SessionDep
 from ..images import ImageRejected, process_jpeg
-from ..schemas import MeIn, MeOut, Page
+from ..schemas import MeIn, MeOut, Page, PushTokenIn
 from ..storage import get_store
 
 router = APIRouter(tags=["me"])
@@ -72,6 +72,18 @@ async def delete_me(session: SessionDep, user: CurrentUser) -> None:
     outstanding offer to turn up somewhere.
     """
     await service.delete_account(session, user=user, store=get_store())
+
+
+@router.put("/me/push-tokens", status_code=status.HTTP_204_NO_CONTENT)
+async def register_push_token(body: PushTokenIn, session: SessionDep, user: CurrentUser) -> None:
+    await push.register(session, user=user, token=body.token, platform=body.platform)
+
+
+@router.delete("/me/push-tokens/{token}", status_code=status.HTTP_204_NO_CONTENT)
+async def unregister_push_token(token: str, session: SessionDep, user: CurrentUser) -> None:
+    """Called on sign-out, so the next person on this phone is not told about
+    the last one's reports. Unknown tokens are not an error."""
+    await push.unregister(session, user=user, token=token)
 
 
 @router.get("/me/issues", response_model=Page)

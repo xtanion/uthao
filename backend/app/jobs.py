@@ -27,10 +27,12 @@ from .authority import (
     AuthorityUpdate,
     ConcernRequest,
     EmailAuthorityChannel,
+    LoggingAuthorityChannel,
     get_channel,
     get_drafter,
     subject_for,
 )
+from . import push
 from .mail import Attachment, new_reply_token
 from .routing import route_report
 from .config import get_settings
@@ -322,7 +324,8 @@ async def check_submitted(limit: int | None = None) -> Report:
     """Ask what became of the reports already raised."""
     settings = get_settings()
     report = Report()
-    channel = get_channel()
+    # Emailed letters have nothing to poll; their replies arrive at the webhook.
+    channel = get_channel(default=LoggingAuthorityChannel())
 
     async with sessionmaker()() as session:
         rows = list(
@@ -405,6 +408,7 @@ JOBS = {
     "escalate": escalate_confirmed,
     "check": check_submitted,
     "prune": prune_otp,
+    "push": push.deliver_pending,
 }
 
 
@@ -420,6 +424,7 @@ async def _main(names: list[str]) -> int:
         for name in chosen:
             print(f"{name}: {await JOBS[name]()}")
     finally:
+        await push.drain()
         await dispose()
     return 0
 

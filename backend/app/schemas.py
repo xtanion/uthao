@@ -1,5 +1,7 @@
 from datetime import date, datetime, time, timezone
 
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, Field, field_serializer
 
 from .enums import ActivityType, Category, EscalationState, Severity, Status
@@ -210,6 +212,11 @@ class MeOut(BaseModel):
 
 class MeIn(BaseModel):
     display_name: str = Field(min_length=2, max_length=40)
+
+
+class PushTokenIn(BaseModel):
+    token: str = Field(max_length=200, pattern=r"^Expo(nent)?PushToken\[[A-Za-z0-9_\-]+\]$")
+    platform: Literal["ios", "android"]
 
 
 class EscalationOut(BaseModel):

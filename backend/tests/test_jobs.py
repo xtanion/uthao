@@ -409,3 +409,28 @@ async def test_a_check_that_throws_does_not_stop_the_batch(client, sender, monke
         authority_module.set_channel(None)
         monkeypatch.delenv("ESCALATE_AFTER_HOURS", raising=False)
         get_settings.cache_clear()
+
+
+async def test_with_no_channel_a_check_skips_rather_than_fails(client, sender, monkeypatch):
+    """Production sets no channel: escalate builds an email one per letter."""
+    from app.config import get_settings
+
+    monkeypatch.setenv("ESCALATE_AFTER_HOURS", "0")
+    get_settings.cache_clear()
+    authority_module.set_drafter(Drafter())
+    authority_module.set_channel(Channel())
+    try:
+        await confirmed_issue(client, sender)
+        await escalate_confirmed()
+        authority_module.set_channel(None)
+
+        result = await check_submitted()
+
+        assert result.considered == 1
+        assert result.failed == 0
+        assert result.skipped == 1
+    finally:
+        authority_module.set_drafter(None)
+        authority_module.set_channel(None)
+        monkeypatch.delenv("ESCALATE_AFTER_HOURS", raising=False)
+        get_settings.cache_clear()

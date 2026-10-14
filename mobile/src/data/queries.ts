@@ -209,9 +209,9 @@ export function useNotifications(enabled: boolean) {
     queryFn: ({ pageParam }) => notifications.list(pageParam),
     getNextPageParam: (last) => last.next_cursor,
     enabled,
-    // Pauses while backgrounded: the focus manager is driven by AppState in
-    // app/_layout.tsx, and refetchIntervalInBackground stays off.
-    refetchInterval: 60_000,
+    // A push invalidates this as it arrives, so polling is only the fallback
+    // for a phone that declined notifications. Paused while backgrounded.
+    refetchInterval: 5 * 60_000,
   });
 }
 

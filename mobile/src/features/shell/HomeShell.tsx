@@ -9,6 +9,7 @@ import { useLocation, useProfile, useUnreadCount } from '../../data/queries';
 import { Centered, LocationFailed, NearbyFeed } from '../issues/NearbyFeed';
 import { MapScreen } from '../issues/MapScreen';
 import { NotificationsScreen } from '../notifications/NotificationsScreen';
+import { usePushNotifications } from '../notifications/usePushNotifications';
 import { SearchScreen } from '../search/SearchScreen';
 import { StatsScreen } from '../stats/StatsScreen';
 import { metric, type as t, useTone } from '../../theme/tokens';
@@ -58,6 +59,7 @@ function Shell() {
   const unread = useUnreadCount(signedIn);
   const me = useProfile(signedIn ? auth.currentUserId() : null);
 
+  usePushNotifications(signedIn, unread);
   // The camera opens before the composer, so backing out of it leaves the
   // person on the feed rather than in an empty report they have to dismiss.
   const capturing = useRef(false);

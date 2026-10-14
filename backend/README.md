@@ -75,27 +75,50 @@ backfill, and walks a downgrade back.
 
 ## Scheduled work
 
-Two jobs, run from the system's scheduler rather than in-process:
+Four jobs, run from the system's scheduler rather than in-process:
 
 ```cron
 17 * * * *  cd /srv/fihy/backend && uv run python -m app.jobs escalate
 30 4 * * *  cd /srv/fihy/backend && uv run python -m app.jobs check
 50 4 * * *  cd /srv/fihy/backend && uv run python -m app.jobs prune
+*/10 * * * * cd /srv/fihy/backend && uv run python -m app.jobs push
 ```
 
-`uv run python -m app.jobs all` runs all three; an unknown name exits `2`.
+`uv run python -m app.jobs all` runs all four; an unknown name exits `2`.
 
 **escalate** takes reports that have been confirmed for `ESCALATE_AFTER_HOURS`
 and raises them with the body responsible. **check** asks what became of the
 ones already raised. **prune** clears spent OTP rows: both tables hold verified
 phone numbers, nothing reads them after the challenge is used or the rate-limit
-hour is up, and left alone they grow without bound.
+hour is up, and left alone they grow without bound. **push** sends any activity
+the in-process push missed; see **Push notifications**.
 
 There is deliberately no in-process scheduler. Under more than one web worker
 every tick would fire once per worker, which for a job that sends letters to a
 municipal body is the wrong kind of mistake to make quietly. The jobs are safe
 to run repeatedly and safe to interrupt: each report is claimed by an insert
 that a unique constraint arbitrates, so two overlapping runs cannot both send.
+
+## Push notifications
+
+Every activity row is also a push to the reporter's phones, through Expo's
+push service, so one integration covers APNs and FCM.
+
+`activity_events` is the outbox. Nothing that writes a row knows about push: a
+session listener notices a commit that added one and schedules a run in the
+same process, which claims unpushed rows with a conditional `UPDATE` and sends
+them. Claiming before sending means a crash loses a push rather than sending
+it twice, and the feed has it either way. The `push` cron runs the same code,
+which is what picks up rows a restart dropped; anything older than
+`PUSH_MAX_AGE_HOURS` by then is left to the feed.
+
+Each message carries the issue id, so a tap opens the report, and the
+reporter's unread count as the badge. A `DeviceNotRegistered` ticket deletes
+the token. A token belongs to the device: registering it while signed in as
+someone else moves it, and the app unregisters on sign-out.
+
+`PUSH_ENABLED=false` turns it off. `EXPO_ACCESS_TOKEN` is only needed once
+enhanced push security is on in the Expo dashboard.
 
 ## Where a complaint is sent
 
@@ -171,11 +194,12 @@ IMAGE=$(fly image show --json | jq -r .Ref)
 fly machine run "$IMAGE" --schedule hourly python -m app.jobs escalate
 fly machine run "$IMAGE" --schedule daily  python -m app.jobs check
 fly machine run "$IMAGE" --schedule daily  python -m app.jobs prune
+fly machine run "$IMAGE" --schedule hourly python -m app.jobs push
 ```
 
-The intervals are fuzzy, which all three tolerate: escalate already waits
+The intervals are fuzzy, which all four tolerate: escalate already waits
 `ESCALATE_AFTER_HOURS` before touching anything, and the other two are
-housekeeping. Re-point them at a new image after a deploy that changes the
+housekeeping, and push only mops up after a restart. Re-point them at a new image after a deploy that changes the
 jobs. Nothing schedules itself in-process - under several web machines every
 tick would fire once per machine, and for a job that sends letters to a
 municipal body that is the wrong mistake to make quietly.
@@ -314,6 +338,8 @@ search and activity screens and are recorded in the contract's own
 | `POST /issues/{id}/fix-dates` | Offer a day. One per person per report. |
 | `POST`/`DELETE /issues/{id}/fix-dates/{id}/votes` | Back a day, or pull out. |
 | `POST /auth/token/refresh` | Now used by the app; see open question 3. |
+| `PUT /me/push-tokens` | Register this phone's Expo push token. |
+| `DELETE /me/push-tokens/{token}` | Forget it, on sign-out. |
 
 **Activity.** `activity_events` holds one row per thing that happened to an
 issue somebody reported. Two kinds exist: `confirmation_received`, which

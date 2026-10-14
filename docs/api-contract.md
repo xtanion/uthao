@@ -380,6 +380,19 @@ refresh, so several requests failing together spend one refresh token rather
 than racing each other. A refresh that comes back `401` clears the stored pair
 and the caller sees the original error.
 
+### `PUT /me/push-tokens`
+
+Authenticated. Body `{ "token": "ExponentPushToken[...]", "platform": "ios" | "android" }`
+→ `204`. Idempotent; a token already registered to another account moves to
+this one. `422` on a token that is not an Expo push token.
+
+### `DELETE /me/push-tokens/{token}`
+
+Authenticated. → `204` whether or not the token was registered to this account.
+
+A push's `data` is `{ "issue_id": "...", "notification_id": "..." }`, and its
+title and body match the notification row the feed shows.
+
 ## Profiles
 
 A profile is a public record of contribution, so all three reads are public.

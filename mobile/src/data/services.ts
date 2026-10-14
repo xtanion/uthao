@@ -5,6 +5,7 @@ import * as SecureStore from 'expo-secure-store';
 import { LocationError, type AuthGateway, type LocationService, type PhotoSource } from './repository';
 import type { Tokens } from './client';
 import { onTokensChanged, request, setTokens } from './client';
+import { registerForPush, unregisterFromPush } from './push';
 
 const TOKEN_KEY = 'fihy.access_token';
 const REFRESH_KEY = 'fihy.refresh_token';
@@ -39,6 +40,8 @@ export class ApiAuthGateway implements AuthGateway {
     const refresh = await SecureStore.getItemAsync(REFRESH_KEY);
     setTokens({ access_token: access, refresh_token: refresh ?? '' });
     this.userId = await SecureStore.getItemAsync(USER_KEY);
+    // Tokens rotate and permission can be granted in Settings meanwhile.
+    if (this.userId) void registerForPush();
   }
 
   currentUserId() {
@@ -61,9 +64,11 @@ export class ApiAuthGateway implements AuthGateway {
     const me = await request<{ id: string }>('/me');
     this.userId = me.id;
     await SecureStore.setItemAsync(USER_KEY, me.id);
+    void registerForPush();
   }
 
   async signOut() {
+    await unregisterFromPush();
     setTokens(null);
   }
 }

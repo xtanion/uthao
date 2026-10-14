@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
-from . import db, migrations
+from . import db, migrations, push
 from .config import get_settings
 from .routers import auth, issues, media, me, notifications, stats, users, webhooks
 
@@ -37,6 +37,7 @@ async def lifespan(app: FastAPI):
     if get_settings().auto_migrate:
         await migrations.upgrade_head()
     yield
+    await push.drain()
     await db.dispose()
 
 
@@ -111,6 +112,7 @@ def create_app() -> FastAPI:
             "storage": "r2" if settings.storage_configured else "local",
             "summaries": "on" if settings.ai_summary_configured else "off",
             "mail": "on" if settings.mail_configured else "off",
+            "push": "on" if settings.push_enabled else "off",
         }
         try:
             async with db.sessionmaker()() as session:

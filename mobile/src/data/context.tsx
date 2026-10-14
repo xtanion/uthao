@@ -34,6 +34,14 @@ export type Services = {
 /** Demo mode runs the whole app on in-memory data: no API, no SMS, no camera. */
 export const DEMO = process.env.EXPO_PUBLIC_DEMO === 'true';
 
+/** Lets a device build keep the in-memory data but use the real camera and GPS. */
+const DEMO_DEVICE_SENSORS = process.env.EXPO_PUBLIC_DEMO_DEVICE_SENSORS === 'true';
+
+const demoDeviceSensors = (): Partial<Services> =>
+  DEMO_DEVICE_SENSORS
+    ? { location: new DeviceLocationService(), photos: new CameraPhotoSource('camera') }
+    : {};
+
 export const demoServices = (over: Partial<Services> = {}): Services => {
   const auth = over.auth ?? new FakeAuthGateway();
   const issues = over.issues ?? new FakeIssuesRepository(undefined, auth);
@@ -75,7 +83,7 @@ export function ServicesProvider({
   children: React.ReactNode;
   value?: Services;
 }) {
-  const services = useMemo(() => value ?? (DEMO ? demoServices() : liveServices()), [value]);
+  const services = useMemo(() => value ?? (DEMO ? demoServices(demoDeviceSensors()) : liveServices()), [value]);
   // Nothing renders until the stored session is back, so no screen reads the
   // signed-in user as null and sends a returning user to sign in again.
   const [restored, setRestored] = useState(!services.auth.restore);

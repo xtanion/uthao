@@ -13,7 +13,8 @@
         "NSCameraUsageDescription": "fihy uses your camera to document civic problems with evidence.",
         "NSLocationWhenInUseUsageDescription": "fihy uses your location to place reports accurately and show nearby issues.",
         "NSPhotoLibraryUsageDescription": "fihy lets you attach evidence from your photo library to a report."
-      }
+      },
+      "appleTeamId": "Z7JCWW3N99"
     },
     "android": {
       "adaptiveIcon": {
@@ -35,7 +36,15 @@
     },
     "plugins": [
       "expo-router",
-      "expo-font"
+      "expo-font",
+      "expo-secure-store",
+      [
+        "expo-notifications",
+        {
+          "defaultChannel": "activity"
+        }
+      ],
+      "./plugins/withSceneLifecycle"
     ],
     "scheme": "fihy"
   }

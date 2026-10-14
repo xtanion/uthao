@@ -158,6 +158,17 @@ class Settings(BaseSettings):
     # /auth/firebase answers 503; the OTP path is unaffected either way.
     firebase_project_id: str = ""
 
+    # Activity is pushed to the reporter's phones through Expo's push service.
+    # Off, and it still lands in the feed the app reads.
+    push_enabled: bool = True
+    expo_push_url: str = "https://exp.host/--/api/v2/push/send"
+    # Only needed once enhanced push security is on in the Expo dashboard.
+    expo_access_token: str = ""
+    # Activity older than this when a push run first sees it stays feed-only:
+    # after an outage, a buzz about yesterday is noise.
+    push_max_age_hours: int = 6
+    push_batch_size: int = 100
+
     @property
     def resolved_r2_endpoint(self) -> str:
         if self.r2_endpoint_url:

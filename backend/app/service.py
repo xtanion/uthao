@@ -19,6 +19,7 @@ from .models import (
     IssuePhoto,
     OtpChallenge,
     OtpRequestLog,
+    PushToken,
     Support,
     User,
     new_id,
@@ -1314,6 +1315,7 @@ async def delete_account(
         .values(actor_id=None)
     )
 
+    await session.execute(delete(PushToken).where(PushToken.user_id == user.id))
     await session.execute(delete(OtpChallenge).where(OtpChallenge.phone == user.phone))
     await session.execute(delete(OtpRequestLog).where(OtpRequestLog.phone == user.phone))
 

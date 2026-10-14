@@ -393,6 +393,7 @@ class ActivityEvent(Base):
     __tablename__ = "activity_events"
     __table_args__ = (
         Index("ix_activity_user_created", "user_id", "created_at"),
+        Index("ix_activity_pushed_created", "pushed_at", "created_at"),
     )
 
     id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
@@ -411,6 +412,10 @@ class ActivityEvent(Base):
     read_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), default=None
     )
+    # Set when a push run claims the row, whether or not a device received it.
+    pushed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), default=None
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, index=True
     )
@@ -418,6 +423,26 @@ class ActivityEvent(Base):
     issue: Mapped[Issue] = relationship(lazy="selectin")
     actor: Mapped["User | None"] = relationship(
         lazy="selectin", foreign_keys=[actor_id]
+    )
+
+
+class PushToken(Base):
+    """An Expo push token for one install. A token belongs to whoever signed in
+    on that device last, so signing in as someone else moves it."""
+
+    __tablename__ = "push_tokens"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    token: Mapped[str] = mapped_column(String(200), unique=True)
+    platform: Mapped[str] = mapped_column(String(16))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow
     )
 
 
