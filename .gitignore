@@ -6,6 +6,7 @@ web-build/
 *.log
 .env
 .env.local
+.env.production
 __pycache__/
 .venv/
 venv/

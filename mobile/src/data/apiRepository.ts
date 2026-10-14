@@ -14,6 +14,7 @@ import type { NotificationPage } from '../domain/notification';
 import type { Escalation } from '../domain/escalation';
 import type { Period, Stats, StatsAreaOption, StatsContributors, StatsScope } from '../domain/stats';
 import type { Account, Profile } from '../domain/profile';
+import { File } from 'expo-file-system';
 import { request } from './client';
 import { ApiError } from './repository';
 import type {
@@ -26,14 +27,10 @@ import type {
 } from './repository';
 import { DUPLICATE_RADIUS_M, PAGE_SIZE } from './repository';
 
+// The global fetch is expo/fetch, which rejects React Native's {uri, name, type}
+// parts before sending; it reads an expo-file-system File instead.
 const appendPhotos = (form: FormData, uris: string[]) => {
-  uris.forEach((uri, i) => {
-    form.append('photos', {
-      uri,
-      name: `photo_${i}.jpg`,
-      type: 'image/jpeg',
-    } as unknown as Blob);
-  });
+  uris.forEach((uri) => form.append('photos', new File(uri) as unknown as Blob));
 };
 
 const scopeQuery = ({ area, point }: StatsScope) =>
@@ -218,7 +215,7 @@ export class ApiUsersRepository implements UsersRepository {
 
   setAvatar(uri: string) {
     const form = new FormData();
-    form.append('photo', { uri, name: 'avatar.jpg', type: 'image/jpeg' } as unknown as Blob);
+    form.append('photo', new File(uri) as unknown as Blob);
     return request<Account>('/me/avatar', { method: 'PUT', body: form });
   }
 

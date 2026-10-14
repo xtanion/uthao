@@ -12,8 +12,37 @@ const TOKEN_KEY = 'fihy.access_token';
 const REFRESH_KEY = 'fihy.refresh_token';
 const USER_KEY = 'fihy.user_id';
 
+/**
+ * The one switch between the two ways a code reaches a phone. Firebase sends a
+ * real SMS; 'otp' is the backend's own endpoint, which only logs the code and
+ * is what a local backend without FIREBASE_PROJECT_ID can answer. A release
+ * build defaults to Firebase and a dev build to the backend.
+ */
+export const SIGN_IN: 'firebase' | 'otp' =
+  (process.env.EXPO_PUBLIC_SIGN_IN as 'firebase' | 'otp' | undefined) ?? (__DEV__ ? 'otp' : 'firebase');
+
+type FirebaseAuth = typeof import('@react-native-firebase/auth');
+type Confirmation = Awaited<ReturnType<FirebaseAuth['signInWithPhoneNumber']>>;
+
+const FIREBASE_MESSAGES: Record<string, string> = {
+  'auth/invalid-phone-number': 'That phone number does not look right.',
+  'auth/invalid-verification-code': 'That code is not right. Check the SMS and try again.',
+  'auth/code-expired': 'That code has expired. Go back and send a new one.',
+  'auth/session-expired': 'That code has expired. Go back and send a new one.',
+  'auth/too-many-requests': 'Too many attempts. Wait a while before trying again.',
+  'auth/quota-exceeded': 'Codes cannot be sent right now. Try again later.',
+  'auth/network-request-failed': 'No connection. Check your network and try again.',
+};
+
+const firebaseError = (error: unknown) => {
+  const code = (error as { code?: string } | null)?.code;
+  if (code && FIREBASE_MESSAGES[code]) return new Error(FIREBASE_MESSAGES[code]);
+  return new Error(`Signing in did not work. Try again.${code ? ` (${code})` : ''}`);
+};
+
 export class ApiAuthGateway implements AuthGateway {
   private userId: string | null = null;
+  private pending: { phone: string; confirmation: Confirmation } | null = null;
 
   constructor() {
     // A refresh that replaces the pair has to reach storage, and one that
@@ -50,6 +79,7 @@ export class ApiAuthGateway implements AuthGateway {
   }
 
   async requestOtp(phone: string) {
+    if (SIGN_IN === 'firebase') return this.sendFirebaseCode(phone);
     await request<void>('/auth/otp/request', {
       method: 'POST',
       body: JSON.stringify({ phone }),
@@ -57,10 +87,17 @@ export class ApiAuthGateway implements AuthGateway {
   }
 
   async verifyOtp(phone: string, code: string) {
-    const result = await request<Tokens>('/auth/otp/verify', {
-      method: 'POST',
-      body: JSON.stringify({ phone, code }),
-    });
+    const result =
+      SIGN_IN === 'firebase'
+        ? await request<Tokens>('/auth/firebase', {
+            method: 'POST',
+            body: JSON.stringify({ id_token: await this.firebaseIdToken(phone, code) }),
+          })
+        : await request<Tokens>('/auth/otp/verify', {
+            method: 'POST',
+            body: JSON.stringify({ phone, code }),
+          });
+    this.pending = null;
     setTokens(result);
     const me = await request<{ id: string }>('/me');
     this.userId = me.id;
@@ -71,6 +108,42 @@ export class ApiAuthGateway implements AuthGateway {
   async signOut() {
     await unregisterFromPush();
     setTokens(null);
+  }
+
+  // Imported on use so the OTP path never touches the native module, which a
+  // build made before Firebase was added does not have.
+  private async sendFirebaseCode(phone: string) {
+    const { getAuth, signInWithPhoneNumber } = await import('@react-native-firebase/auth');
+    try {
+      this.pending = { phone, confirmation: await signInWithPhoneNumber(getAuth(), phone) };
+    } catch (error) {
+      throw firebaseError(error);
+    }
+  }
+
+  /**
+   * Firebase's own session is dropped as soon as its ID token is read: ours is
+   * the one the app runs on, and a second session left in the keychain would
+   * outlive signing out here.
+   */
+  private async firebaseIdToken(phone: string, code: string) {
+    const { getAuth, getIdToken, signOut } = await import('@react-native-firebase/auth');
+    const auth = getAuth();
+    try {
+      // Android can verify the SMS on its own and sign in before the code is
+      // typed, after which confirming it again is rejected.
+      let user = auth.currentUser?.phoneNumber === phone ? auth.currentUser : null;
+      if (!user) {
+        if (this.pending?.phone !== phone) throw { code: 'auth/session-expired' };
+        user = (await this.pending.confirmation.confirm(code))?.user ?? auth.currentUser;
+      }
+      if (!user) throw { code: 'auth/session-expired' };
+      return await getIdToken(user);
+    } catch (error) {
+      throw firebaseError(error);
+    } finally {
+      await signOut(auth).catch(() => {});
+    }
   }
 }
 
@@ -85,7 +158,7 @@ export class DeviceLocationService implements LocationService {
       throw new LocationError(
         permission.canAskAgain
           ? 'Location permission is needed to place and find reports.'
-          : 'Location access is turned off for fihy. Allow it in Settings to place and find reports.',
+          : 'Location access is turned off for Uthao. Allow it in Settings to place and find reports.',
         permission.canAskAgain ? 'denied' : 'blocked',
       );
     }

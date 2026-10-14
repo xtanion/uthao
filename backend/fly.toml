@@ -1,5 +1,5 @@
-app = "fihy-backend"
-primary_region = "bom"
+app = "uthao-backend"
+primary_region = "sin"
 
 [build]
   dockerfile = "Dockerfile"

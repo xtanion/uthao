@@ -5,8 +5,11 @@ const { withAppDelegate, withInfoPlist } = require('expo/config-plugins');
 // ExpoAppSceneDelegate for this; it only needs the app delegate to hand over
 // its factory and the Info.plist to name it.
 
+// Other plugins insert into this block (@react-native-firebase/app puts
+// FirebaseApp.configure() right above startReactNative), so whatever sits
+// between the window and the start is kept when the block goes.
 const WINDOW_BLOCK =
-  /\n#if os\(iOS\) \|\| os\(tvOS\)\n\s*window = UIWindow\(frame: UIScreen\.main\.bounds\)\n\s*factory\.startReactNative\([\s\S]*?\)\n#endif\n/;
+  /\n#if os\(iOS\) \|\| os\(tvOS\)\n\s*window = UIWindow\(frame: UIScreen\.main\.bounds\)\n([\s\S]*?)\s*factory\.startReactNative\([\s\S]*?\)\n#endif\n/;
 
 const withSceneAppDelegate = (config) =>
   withAppDelegate(config, (config) => {
@@ -17,7 +20,7 @@ const withSceneAppDelegate = (config) =>
     }
     src = src
       .replace('class AppDelegate: ExpoAppDelegate {', 'class AppDelegate: ExpoAppDelegate, ExpoReactNativeFactoryProvider {')
-      .replace(WINDOW_BLOCK, '\n');
+      .replace(WINDOW_BLOCK, (_, kept) => (kept ? `\n${kept}\n` : '\n'));
     config.modResults.contents = src;
     return config;
   });

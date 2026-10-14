@@ -19,6 +19,7 @@ from .config import Settings, get_settings
 log = logging.getLogger(__name__)
 
 ISSUER = "https://securetoken.google.com/"
+CLOCK_SKEW_SECONDS = 10
 
 
 class TokenRejected(Exception):
@@ -59,12 +60,18 @@ class GoogleTokenVerifier(TokenVerifier):
         from google.oauth2 import id_token as google_id_token
 
         try:
+            # The app posts the token the moment Firebase mints it, so a server
+            # clock slightly behind Google's would read it as "used too early".
             claims = google_id_token.verify_firebase_token(
-                id_token, self._transport(), audience=self._project
+                id_token,
+                self._transport(),
+                audience=self._project,
+                clock_skew_in_seconds=CLOCK_SKEW_SECONDS,
             )
         except Exception as exc:
             # Wrong signature, wrong project, or expired. All the same to a
             # caller, and saying which would help someone guessing.
+            log.warning("firebase token rejected: %s", exc)
             raise TokenRejected("That sign-in could not be verified.") from exc
 
         if claims.get("iss") != f"{ISSUER}{self._project}":

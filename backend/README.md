@@ -159,12 +159,12 @@ uv run python scripts/seed_authorities.py
 
 ## Deploying
 
-Fly, `bom` (Mumbai). `fly.toml` is in this directory and the Dockerfile is used
+Fly, `sin` (Singapore): Fly no longer provisions new machines in `bom`. Keep the Supabase project in Singapore too, so the per-request queries stay in-region. `fly.toml` is in this directory and the Dockerfile is used
 as-is.
 
 ```bash
 brew install flyctl && fly auth login
-fly apps create fihy-backend
+fly apps create uthao-backend
 
 # SECRET_KEY first - the script refuses to send the development default.
 openssl rand -hex 32
@@ -207,7 +207,7 @@ municipal body that is the wrong mistake to make quietly.
 ### Checks
 
 ```bash
-curl https://fihy-backend.fly.dev/health
+curl https://api.uthao.in/health
 ```
 
 wants `"database": "up"` and `"storage": "r2"`. `/health` touches the database

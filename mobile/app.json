@@ -10,11 +10,12 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.xtanion.fihy",
       "infoPlist": {
-        "NSCameraUsageDescription": "fihy uses your camera to document civic problems with evidence.",
-        "NSLocationWhenInUseUsageDescription": "fihy uses your location to place reports accurately and show nearby issues.",
-        "NSPhotoLibraryUsageDescription": "fihy lets you attach evidence from your photo library to a report."
+        "NSCameraUsageDescription": "Uthao uses your camera to document civic problems with evidence.",
+        "NSLocationWhenInUseUsageDescription": "Uthao uses your location to place reports accurately and show nearby issues.",
+        "NSPhotoLibraryUsageDescription": "Uthao lets you attach evidence from your photo library to a report."
       },
-      "appleTeamId": "Z7JCWW3N99"
+      "appleTeamId": "Z7JCWW3N99",
+      "googleServicesFile": "./GoogleService-Info.plist"
     },
     "android": {
       "adaptiveIcon": {
@@ -29,7 +30,8 @@
         "CAMERA",
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION"
-      ]
+      ],
+      "googleServicesFile": "./google-services.json"
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -41,10 +43,32 @@
       [
         "expo-notifications",
         {
-          "defaultChannel": "activity"
+          "defaultChannel": "activity",
+          "enableBackgroundRemoteNotifications": true
         }
       ],
-      "./plugins/withSceneLifecycle"
+      "./plugins/withSceneLifecycle",
+      [
+        "@react-native-firebase/app",
+        {
+          "ios": {
+            "disableSPM": true
+          }
+        }
+      ],
+      "@react-native-firebase/auth",
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "useFrameworks": "static",
+            "forceStaticLinking": [
+              "RNFBApp",
+              "RNFBAuth"
+            ]
+          }
+        }
+      ]
     ],
     "scheme": "fihy"
   }
