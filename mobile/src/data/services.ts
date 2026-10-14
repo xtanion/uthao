@@ -3,6 +3,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import * as SecureStore from 'expo-secure-store';
 import { LocationError, type AuthGateway, type LocationService, type PhotoSource } from './repository';
+import type { GeoPoint } from '../domain/issue';
 import type { Tokens } from './client';
 import { onTokensChanged, request, setTokens } from './client';
 import { registerForPush, unregisterFromPush } from './push';
@@ -109,6 +110,19 @@ export class DeviceLocationService implements LocationService {
       "Couldn't find your location. Move somewhere with a clearer view of the sky and try again.",
       'unavailable',
     );
+  }
+
+  async describe(point: GeoPoint) {
+    try {
+      const [place] = await Location.reverseGeocodeAsync(point);
+      if (!place) return null;
+      const street = place.street ?? place.name;
+      const area = place.district ?? place.subregion ?? place.city;
+      const line = [street, area].filter(Boolean).join(', ');
+      return line || null;
+    } catch {
+      return null;
+    }
   }
 
   private async fix() {

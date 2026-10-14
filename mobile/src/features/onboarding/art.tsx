@@ -1,10 +1,11 @@
 import { ArrowUp, BadgeCheck, Camera, Eye } from 'lucide-react-native';
-import React from 'react';
-import { Dimensions, StyleSheet, Text, useColorScheme, View } from 'react-native';
+import React, { useEffect, useMemo, useRef } from 'react';
+import { Animated, Dimensions, Easing, StyleSheet, Text, useColorScheme, View } from 'react-native';
 import Svg, { Circle, Defs, LinearGradient, Path, RadialGradient, Rect, Stop } from 'react-native-svg';
 import type { Category, Status } from '../../domain/issue';
 import { type as t, useTone } from '../../theme/tokens';
 import { CategoryGlyph, StatusGlyph } from '../issues/glyphs';
+import { useReducedMotion } from '../shell/motion';
 
 export const hue = {
   mint: '#2fd98f',
@@ -17,44 +18,141 @@ export const hue = {
 
 const STAGE_HEIGHT = Math.min(300, Math.round(Dimensions.get('window').height * 0.36));
 
-/** Three soft colour fields behind each slide's illustration. */
-function Backdrop({ id, colours }: { id: string; colours: [string, string, string] }) {
-  const strength = useColorScheme() === 'dark' ? 0.55 : 0.42;
-  const fields = [
-    { cx: '12%', cy: '18%', r: '62%' },
-    { cx: '92%', cy: '30%', r: '55%' },
-    { cx: '55%', cy: '105%', r: '60%' },
-  ];
+/** One soft light behind the illustration that fades into the page. */
+function Glow({ id, colour }: { id: string; colour: string }) {
+  const strength = useColorScheme() === 'dark' ? 0.24 : 0.18;
   return (
     <Svg style={StyleSheet.absoluteFill} width="100%" height="100%">
       <Defs>
-        {colours.map((colour, i) => (
-          <RadialGradient key={i} id={`${id}-${i}`} cx="50%" cy="50%" r="50%">
-            <Stop offset="0" stopColor={colour} stopOpacity={strength} />
-            <Stop offset="1" stopColor={colour} stopOpacity={0} />
-          </RadialGradient>
-        ))}
+        <RadialGradient id={`${id}-glow`} cx="50%" cy="50%" r="50%">
+          <Stop offset="0" stopColor={colour} stopOpacity={strength} />
+          <Stop offset="0.55" stopColor={colour} stopOpacity={strength * 0.35} />
+          <Stop offset="1" stopColor={colour} stopOpacity={0} />
+        </RadialGradient>
       </Defs>
-      {fields.map((field, i) => (
-        <Circle key={i} cx={field.cx} cy={field.cy} r={field.r} fill={`url(#${id}-${i})`} />
-      ))}
+      <Circle cx="50%" cy="50%" r={STAGE_HEIGHT * 0.55} fill={`url(#${id}-glow)`} />
     </Svg>
+  );
+}
+
+/** The app mark's gradient, stretched to whatever it sits in. */
+export function GradientFill({ id, radius }: { id: string; radius: number }) {
+  const tone = useTone();
+  return (
+    <Svg style={StyleSheet.absoluteFill} width="100%" height="100%">
+      <Defs>
+        <LinearGradient id={id} x1="0" y1="0" x2="1" y2="1">
+          <Stop offset="0" stopColor={tone.accentSoft} />
+          <Stop offset="1" stopColor={tone.accentDeep} />
+        </LinearGradient>
+      </Defs>
+      <Rect x={0} y={0} width="100%" height="100%" rx={radius} ry={radius} fill={`url(#${id})`} />
+    </Svg>
+  );
+}
+
+const seeded = (key: string) => {
+  let a = [...key].reduce((h, c) => Math.imul(h ^ c.charCodeAt(0), 2654435761), 7);
+  return () => {
+    a = (a + 0x6d2b79f5) | 0;
+    let x = Math.imul(a ^ (a >>> 15), 1 | a);
+    x = (x + Math.imul(x ^ (x >>> 7), 61 | x)) ^ x;
+    return ((x ^ (x >>> 14)) >>> 0) / 4294967296;
+  };
+};
+
+const PALETTE = Object.values(hue);
+
+/** Scattered dots and rings that drift slowly. Seeded by slide, so each slide
+ *  keeps its own arrangement across renders. */
+function Bubbles({ id, count = 11 }: { id: string; count?: number }) {
+  const still = useReducedMotion();
+  const bubbles = useMemo(() => {
+    const random = seeded(id);
+    return Array.from({ length: count }, () => {
+      const size = 8 + Math.round(random() * 38);
+      return {
+        size,
+        left: `${Math.round(random() * 92)}%` as const,
+        top: `${Math.round(random() * 88)}%` as const,
+        colour: PALETTE[Math.floor(random() * PALETTE.length)],
+        ring: random() < 0.35,
+        opacity: 0.35 + random() * 0.45,
+        drift: 4 + random() * 8,
+        period: 2200 + random() * 2400,
+      };
+    });
+  }, [id, count]);
+
+  return (
+    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+      {bubbles.map((bubble, i) => (
+        <Bubble key={i} {...bubble} still={still} />
+      ))}
+    </View>
+  );
+}
+
+function Bubble({
+  size, left, top, colour, ring, opacity, drift, period, still,
+}: {
+  size: number;
+  left: `${number}%`;
+  top: `${number}%`;
+  colour: string;
+  ring: boolean;
+  opacity: number;
+  drift: number;
+  period: number;
+  still: boolean;
+}) {
+  const float = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (still) return;
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(float, { toValue: 1, duration: period, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(float, { toValue: 0, duration: period, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [float, period, still]);
+
+  return (
+    <Animated.View
+      style={{
+        position: 'absolute',
+        left,
+        top,
+        width: size,
+        height: size,
+        borderRadius: size / 2,
+        opacity,
+        backgroundColor: ring ? 'transparent' : colour,
+        borderWidth: ring ? Math.max(2, size / 10) : 0,
+        borderColor: colour,
+        transform: [{ translateY: float.interpolate({ inputRange: [0, 1], outputRange: [0, -drift] }) }],
+      }}
+    />
   );
 }
 
 export function Stage({
   id,
-  colours,
+  glow,
+  bubbles = true,
   children,
 }: {
   id: string;
-  colours: [string, string, string];
+  glow?: string;
+  bubbles?: boolean;
   children: React.ReactNode;
 }) {
-  const tone = useTone();
   return (
-    <View style={[styles.stage, { backgroundColor: tone.surface }]}>
-      <Backdrop id={id} colours={colours} />
+    <View style={styles.stage}>
+      {glow && <Glow id={id} colour={glow} />}
+      {bubbles && <Bubbles id={id} />}
       {children}
     </View>
   );
@@ -80,11 +178,113 @@ const SHOWN: { category: Category; colour: string }[] = [
   { category: 'traffic_infrastructure', colour: hue.amber },
 ];
 
+const SAFFRON = '#ff9933';
+const INDIA_GREEN = '#138808';
+const CHAKRA = '#000080';
+const FLAG_W = 216;
+const FLAG_H = 144;
+const STRIPS = 24;
+const STRIP_W = FLAG_W / STRIPS;
+const WAVE_STEPS = 8;
+
+function Tricolour() {
+  const band = FLAG_H / 3;
+  const r = (band * 0.75) / 2;
+  const cx = FLAG_W / 2;
+  const cy = FLAG_H / 2;
+  return (
+    <Svg width={FLAG_W} height={FLAG_H}>
+      <Rect x={0} y={0} width={FLAG_W} height={band} fill={SAFFRON} />
+      <Rect x={0} y={band} width={FLAG_W} height={band} fill="#ffffff" />
+      <Rect x={0} y={band * 2} width={FLAG_W} height={band} fill={INDIA_GREEN} />
+      <Circle cx={cx} cy={cy} r={r} fill="none" stroke={CHAKRA} strokeWidth={1.6} />
+      <Circle cx={cx} cy={cy} r={r * 0.18} fill={CHAKRA} />
+      <Path
+        d={Array.from({ length: 24 }, (_, i) => {
+          const angle = (i * Math.PI * 2) / 24;
+          return `M${cx} ${cy}L${cx + Math.cos(angle) * r} ${cy + Math.sin(angle) * r}`;
+        }).join('')}
+        stroke={CHAKRA}
+        strokeWidth={0.9}
+      />
+    </Svg>
+  );
+}
+
+/**
+ * The tricolour, waving. It is cut into vertical strips that each bob on a
+ * sine a little behind the one before, with the swing growing away from the
+ * pole and a shade that follows the fold.
+ */
+export function WelcomeArt() {
+  const tone = useTone();
+  const still = useReducedMotion();
+  const wave = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (still) return;
+    const loop = Animated.loop(
+      Animated.timing(wave, { toValue: 1, duration: 2600, easing: Easing.linear, useNativeDriver: true }),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [wave, still]);
+
+  const steps = Array.from({ length: WAVE_STEPS + 1 }, (_, k) => k / WAVE_STEPS);
+  const curve = (phase: number, scale: number, offset = 0) =>
+    steps.map((x) => offset + scale * Math.sin(2 * Math.PI * (x - phase)));
+
+  return (
+    <Stage id="welcome" bubbles={false} glow={SAFFRON}>
+      <View style={styles.flag}>
+        <View style={[styles.pole, { backgroundColor: tone.chalk }]} />
+        <View style={{ width: FLAG_W, height: FLAG_H + 24, marginTop: 6 }}>
+          {Array.from({ length: STRIPS }, (_, i) => {
+            const along = i / STRIPS;
+            const amplitude = 1 + 9 * along;
+            const phase = along * 0.9;
+            return (
+              <Animated.View
+                key={i}
+                style={[
+                  styles.strip,
+                  {
+                    left: i * STRIP_W,
+                    width: STRIP_W + 0.6,
+                    transform: [
+                      { translateY: wave.interpolate({ inputRange: steps, outputRange: curve(phase, amplitude) }) },
+                    ],
+                  },
+                ]}>
+                <View style={{ position: 'absolute', left: -i * STRIP_W }}>
+                  <Tricolour />
+                </View>
+                <Animated.View
+                  style={[
+                    StyleSheet.absoluteFill,
+                    {
+                      backgroundColor: '#000',
+                      opacity: wave.interpolate({
+                        inputRange: steps,
+                        outputRange: curve(phase - 0.25, 0.09 * (0.4 + along), 0.09 * (0.4 + along)),
+                      }),
+                    },
+                  ]}
+                />
+              </Animated.View>
+            );
+          })}
+        </View>
+      </View>
+    </Stage>
+  );
+}
+
 /** What can be reported, as the glyphs the rest of the app uses. */
 export function ReportArt() {
   const tone = useTone();
   return (
-    <Stage id="report" colours={[hue.coral, hue.amber, hue.mint]}>
+    <Stage id="report">
       <View style={styles.grid}>
         {SHOWN.map(({ category, colour }, i) => (
           <View
@@ -113,7 +313,7 @@ export function ReportArt() {
 export function ActionsArt() {
   const tone = useTone();
   return (
-    <Stage id="actions" colours={[hue.sky, hue.violet, hue.mint]}>
+    <Stage id="actions" glow={hue.sky}>
       <Card style={{ width: 250 }}>
         <View style={styles.cardMeta}>
           <View style={[styles.metaDot, { backgroundColor: hue.coral }]} />
@@ -129,7 +329,7 @@ export function ActionsArt() {
               <Stop offset="1" stopColor={hue.coral} stopOpacity={0.55} />
             </LinearGradient>
           </Defs>
-          <Rect x={0} y={0} width="100%" height={64} rx={8} fill="url(#plate)" />
+          <Rect x={0} y={0} width="100%" height={64} rx={16} fill="url(#plate)" />
         </Svg>
         <View style={styles.pills}>
           <View style={[styles.pill, { backgroundColor: `${tone.accent}2e` }]}>
@@ -156,7 +356,7 @@ const PEOPLE = [
 export function ConfirmArt() {
   const tone = useTone();
   return (
-    <Stage id="confirm" colours={[hue.violet, hue.pink, hue.sky]}>
+    <Stage id="confirm" glow={hue.violet}>
       <View style={styles.polaroids}>
         {PEOPLE.map((person, i) => (
           <View
@@ -200,7 +400,7 @@ export function EscalateArt() {
     { status: 'resolved', label: 'Fixed', note: 'checked by you', colour: hue.mint },
   ];
   return (
-    <Stage id="escalate" colours={[hue.sky, hue.mint, hue.violet]}>
+    <Stage id="escalate">
       <Card style={{ width: 240, paddingVertical: 18 }}>
         {steps.map((step, i) => (
           <View key={step.label} style={styles.trackRow}>
@@ -236,15 +436,9 @@ const NEARBY = [
 export function LocationArt() {
   const tone = useTone();
   return (
-    <Stage id="location" colours={[hue.mint, hue.sky, hue.amber]}>
+    <Stage id="location" glow={hue.mint}>
       <Svg width={180} height={180} viewBox="0 0 168 168">
-        <Defs>
-          <LinearGradient id="halo" x1="0" y1="0" x2="1" y2="1">
-            <Stop offset="0" stopColor={tone.accentSoft} stopOpacity={0.6} />
-            <Stop offset="1" stopColor={tone.accentDeep} stopOpacity={0.2} />
-          </LinearGradient>
-        </Defs>
-        <Circle cx={84} cy={84} r={72} fill="url(#halo)" />
+        <Circle cx={84} cy={84} r={72} fill={tone.accent} fillOpacity={0.14} />
         <Circle cx={84} cy={84} r={46} fill="none" stroke={tone.accentDeep} strokeOpacity={0.4} strokeWidth={1.5} />
         <Circle cx={84} cy={84} r={22} fill="none" stroke={tone.accentDeep} strokeOpacity={0.55} strokeWidth={1.5} />
         {NEARBY.map((dot) => (
@@ -264,17 +458,20 @@ export function LocationArt() {
 }
 
 const styles = StyleSheet.create({
+  flag: { flexDirection: 'row', alignItems: 'flex-start', marginLeft: -20 },
+  pole: { width: 5, height: FLAG_H + 70, borderRadius: 3, marginRight: 1 },
+  strip: { position: 'absolute', top: 0, height: FLAG_H, overflow: 'hidden' },
   stage: {
-    height: STAGE_HEIGHT, borderRadius: 28, overflow: 'hidden',
+    height: STAGE_HEIGHT,
     alignItems: 'center', justifyContent: 'center',
   },
-  card: { borderRadius: 16, borderWidth: 1, padding: 14 },
+  card: { borderRadius: 24, borderWidth: 1, padding: 16 },
   grid: {
     flexDirection: 'row', flexWrap: 'wrap', width: 248,
     alignItems: 'center', justifyContent: 'center',
   },
   tile: {
-    width: 52, height: 52, borderRadius: 14, borderWidth: 1, margin: 5,
+    width: 52, height: 52, borderRadius: 26, borderWidth: 1.5, margin: 5,
     alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
   },
   tileWash: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
@@ -290,8 +487,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 11, paddingVertical: 6, borderRadius: 999,
   },
   polaroids: { flexDirection: 'row', marginTop: -14 },
-  polaroid: { width: 82, padding: 6, paddingBottom: 8, borderRadius: 10, borderWidth: 1, marginHorizontal: -4 },
-  photo: { height: 70, borderRadius: 6, alignItems: 'center', justifyContent: 'center' },
+  polaroid: { width: 82, padding: 6, paddingBottom: 8, borderRadius: 18, borderWidth: 1, marginHorizontal: -4 },
+  photo: { height: 70, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
   byline: { flexDirection: 'row', alignItems: 'center', marginTop: 6 },
   avatar: { width: 12, height: 12, borderRadius: 6 },
   badge: {

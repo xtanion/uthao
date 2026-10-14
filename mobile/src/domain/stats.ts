@@ -66,3 +66,25 @@ export type StatsContributors = {
   area: StatsArea | null;
   items: StatsContributor[];
 };
+
+const UNITS = [
+  { size: 1e9, suffix: 'B' },
+  { size: 1e6, suffix: 'M' },
+  { size: 1e3, suffix: 'K' },
+];
+
+/** 999, 1.2K, 12K, 340K, 1.5M. One decimal only while it still adds
+ *  information, and a value that rounds up to 1000 of a unit moves to the next. */
+export function compactCount(n: number): string {
+  const abs = Math.abs(n);
+  if (abs < 1000) return String(Math.round(n));
+  for (let i = UNITS.length - 1; i >= 0; i -= 1) {
+    const { size, suffix } = UNITS[i];
+    const scaled = abs / size;
+    const shown = scaled < 10 ? Math.round(scaled * 10) / 10 : Math.round(scaled);
+    if (shown < 1000 || i === 0) {
+      return `${n < 0 ? '-' : ''}${shown}${suffix}`;
+    }
+  }
+  return String(n);
+}

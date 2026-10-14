@@ -1,7 +1,9 @@
-import { useRouter } from 'expo-router';
-import React, { useCallback, useMemo, useState } from 'react';
+import { Stack, useRouter } from 'expo-router';
+import { Camera, Check } from 'lucide-react-native';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Pressable,
   RefreshControl,
@@ -13,7 +15,7 @@ import { useServices } from '../../data/context';
 import { useConfirm, useProfile, useUserIssues, useUserSupports } from '../../data/queries';
 import type { Issue } from '../../domain/issue';
 import type { Contributions, Profile } from '../../domain/profile';
-import { REPUTATION_WEIGHTS, joinedLabel } from '../../domain/profile';
+import { REPUTATION_WEIGHTS, joinedLabel, standing } from '../../domain/profile';
 import { metric, type as t, useTone } from '../../theme/tokens';
 import { IssueCard } from '../issues/IssueCard';
 import { Centered, Notice } from '../issues/NearbyFeed';
@@ -85,13 +87,24 @@ export function ProfileScreen({ userId }: { userId: string }) {
       }
       ListHeaderComponent={
         <View>
+          {isMe && (
+            <Stack.Screen
+              options={{
+                headerRight: () => (
+                  <Pressable onPress={() => router.push('/profile/edit')} hitSlop={8} style={styles.edit}>
+                    <Text style={[t.display(15, '500'), { color: tone.ink }]}>Edit profile</Text>
+                  </Pressable>
+                ),
+              }}
+            />
+          )}
           <Header profile={profile.data} isMe={isMe} />
           <View style={[styles.tabs, { borderBottomColor: tone.hairline }]}>
             {TABS.map((label, i) => (
               <Pressable key={label} style={styles.tab} onPress={() => setTab(i as Tab)}>
                 <Text
                   style={[
-                    t.display(14, '700'),
+                    t.display(14, '600'),
                     { color: i === tab ? tone.ink : tone.chalk },
                   ]}>
                   {label}
@@ -144,41 +157,32 @@ export function ProfileScreen({ userId }: { userId: string }) {
   );
 }
 
-/** Name and score lead; the avatar sits opposite, as on Threads. */
 function Header({ profile, isMe }: { profile: Profile; isMe: boolean }) {
   const tone = useTone();
-  const router = useRouter();
   const joined = joinedLabel(profile.joined_at);
   return (
     <View style={styles.header}>
       <View style={styles.identity}>
-        <View style={{ flex: 1, paddingRight: 14 }}>
-          <Text style={[t.display(26, '700'), { color: tone.ink }]}>
+        <View style={[styles.ring, { borderColor: tone.accent }]}>
+          <Avatar
+            id={profile.id}
+            name={profile.display_name}
+            uri={profile.avatar_url}
+            size={64}
+          />
+        </View>
+        <View style={{ flex: 1, marginLeft: 16 }}>
+          <Text numberOfLines={2} style={[t.display(26, '600'), { color: tone.ink }]}>
             {profile.display_name}
           </Text>
-          <Text style={[t.meta(11, '500', 0.4), { color: tone.chalk, marginTop: 5 }]}>
-            {isMe ? 'You' : 'Hooman'}
-            {joined ? `  ·  Joined ${joined}` : ''}
-          </Text>
+          {!!joined && (
+            <Text style={[t.body(14), { color: tone.chalk, marginTop: 2 }]}>Joined {joined}</Text>
+          )}
         </View>
-        <Avatar
-          id={profile.id}
-          name={profile.display_name}
-          uri={profile.avatar_url}
-          size={66}
-        />
       </View>
 
-      {isMe && (
-        <Pressable
-          onPress={() => router.push('/profile/edit')}
-          style={[styles.edit, { borderColor: tone.hairline }]}>
-          <Text style={[t.meta(12, '700', 0.2), { color: tone.ink }]}>Edit profile</Text>
-        </Pressable>
-      )}
-
-      <Reputation profile={profile} />
-      <ContributionGrid contributions={profile.contributions} />
+      <Reputation profile={profile} isMe={isMe} />
+      <Journey contributions={profile.contributions} isMe={isMe} />
     </View>
   );
 }
@@ -188,8 +192,11 @@ function Header({ profile, isMe }: { profile: Profile; isMe: boolean }) {
  * account for invites suspicion; this one shows its work, the same reason the
  * issue detail spells out its corroboration count.
  */
-function Reputation({ profile }: { profile: Profile }) {
+function Reputation({ profile, isMe }: { profile: Profile; isMe: boolean }) {
   const tone = useTone();
+  const router = useRouter();
+  const { photos } = useServices();
+  const capturing = useRef(false);
   const { upvotes_received, posts, resolutions } = profile.contributions;
   const parts = [
     { value: upvotes_received, weight: REPUTATION_WEIGHTS.upvote, label: 'confirmations' },
@@ -197,17 +204,33 @@ function Reputation({ profile }: { profile: Profile }) {
     { value: resolutions, weight: REPUTATION_WEIGHTS.resolution, label: 'resolved' },
   ].filter((part) => part.value > 0);
 
+  const report = async () => {
+    if (capturing.current) return;
+    capturing.current = true;
+    try {
+      const shot = await photos.capture();
+      if (shot) router.push({ pathname: '/report', params: { photos: JSON.stringify([shot]) } });
+    } catch (e) {
+      Alert.alert('Could not open the camera', (e as Error).message);
+    } finally {
+      capturing.current = false;
+    }
+  };
+
   return (
-    <View style={[styles.score, { borderColor: tone.hairline }]}>
-      <View style={styles.scoreRow}>
-        <Text style={[t.display(34, '700'), { color: tone.ink }]}>
-          {profile.reputation}
-        </Text>
-        <Text style={[t.meta(11, '700', 0), { color: tone.chalk, marginLeft: 9 }]}>
-          Reputation
-        </Text>
+    <View style={[styles.score, { backgroundColor: tone.surface }]}>
+      <View style={styles.scoreHead}>
+        <View>
+          <Text style={[t.meta(13, '500', 0.2), { color: tone.chalk }]}>Reputation</Text>
+          <Text style={[t.display(40, '600'), { color: tone.ink, marginTop: 2 }]}>
+            {profile.reputation}
+          </Text>
+        </View>
+        <View style={[styles.standing, { backgroundColor: tone.bg }]}>
+          <Text style={[t.meta(12, '500', 0), { color: tone.ink }]}>{standing(profile.reputation)}</Text>
+        </View>
       </View>
-      <Text style={[t.body(13), { color: tone.chalk, marginTop: 4 }]}>
+      <Text style={[t.body(14), { color: tone.chalk, marginTop: 8 }]}>
         {parts.length
           ? parts
               .map(
@@ -215,42 +238,88 @@ function Reputation({ profile }: { profile: Profile }) {
                   `${part.value} ${part.label}${part.weight > 1 ? ` x${part.weight}` : ''}`,
               )
               .join('  +  ')
-          : 'Report something or confirm a neighbour to start earning.'}
+          : isMe
+            ? 'Earn reputation when you report an issue or confirm one a neighbour reported.'
+            : 'Nothing earned yet.'}
       </Text>
+
+      {isMe && (
+        <View style={styles.actions}>
+          <Pressable
+            onPress={report}
+            style={({ pressed }) => [styles.action, { backgroundColor: tone.accent, opacity: pressed ? 0.8 : 1 }]}>
+            <Camera size={18} color="#000" />
+            <Text style={[t.display(15, '600'), { color: '#000', marginLeft: 8 }]}>Report</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => router.dismissTo('/')}
+            style={({ pressed }) => [styles.action, { backgroundColor: tone.bg, opacity: pressed ? 0.7 : 1 }]}>
+            <Check size={18} color={tone.accentDeep} />
+            <Text style={[t.display(15, '600'), { color: tone.ink, marginLeft: 8 }]}>Confirm nearby</Text>
+          </Pressable>
+        </View>
+      )}
     </View>
   );
 }
 
-const ORDER: (keyof Contributions)[] = [
-  'posts',
-  'upvotes_received',
-  'supports_given',
-  'resolutions',
-  'comments_written',
-];
-
-const SHORT: Record<keyof Contributions, string> = {
-  posts: 'Reports',
-  upvotes_received: 'Confirmed by',
-  supports_given: 'Supported',
-  resolutions: 'Resolved',
-  comments_written: 'Comments',
-};
-
-function ContributionGrid({ contributions }: { contributions: Contributions }) {
+/** A report's life as three stops, each lit once anything has reached it. */
+function Journey({ contributions, isMe }: { contributions: Contributions; isMe: boolean }) {
   const tone = useTone();
+  const stops = [
+    { label: 'Reported', value: contributions.posts, align: 'flex-start' as const },
+    { label: 'Confirmed by', value: contributions.upvotes_received, align: 'center' as const },
+    { label: 'Resolved', value: contributions.resolutions, align: 'flex-end' as const },
+  ];
+  const lit = (i: number) => stops[i].value > 0;
+
   return (
-    <View style={styles.stats}>
-      {ORDER.map((key) => (
-        <View key={key} style={[styles.stat, { borderColor: tone.hairline }]}>
-          <Text style={[t.display(19, '700'), { color: tone.ink }]}>
-            {contributions[key]}
-          </Text>
-          <Text style={[t.meta(11, '500', 0), { color: tone.chalk, marginTop: 3 }]}>
-            {SHORT[key]}
-          </Text>
-        </View>
-      ))}
+    <View style={styles.journey}>
+      <Text style={[t.body(15), { color: tone.chalk }]}>
+        {isMe ? 'Your reports so far' : 'Reports so far'}
+      </Text>
+
+      <View style={styles.track}>
+        {stops.map((stop, i) => (
+          <React.Fragment key={stop.label}>
+            <View
+              style={[
+                styles.node,
+                {
+                  borderColor: lit(i) ? tone.accent : tone.chalk,
+                  backgroundColor: lit(i) ? tone.accent : 'transparent',
+                },
+              ]}
+            />
+            {i < stops.length - 1 && (
+              <View
+                style={[
+                  styles.segment,
+                  { backgroundColor: lit(i + 1) ? tone.accent : tone.hairline },
+                ]}
+              />
+            )}
+          </React.Fragment>
+        ))}
+      </View>
+
+      <View style={styles.stops}>
+        {stops.map((stop) => (
+          <View key={stop.label} style={{ flex: 1, alignItems: stop.align }}>
+            <Text style={[t.display(30, '600'), { color: tone.ink }]}>{stop.value}</Text>
+            <Text style={[t.body(15), { color: tone.chalk, marginTop: 2 }]}>{stop.label}</Text>
+          </View>
+        ))}
+      </View>
+
+      <View style={[styles.rule, { backgroundColor: tone.hairline }]} />
+
+      <Text style={[t.body(15), { color: tone.chalk }]}>Helping neighbours</Text>
+      <Text style={[t.display(17, '600'), { color: tone.ink, marginTop: 8 }]}>
+        <Text style={{ color: tone.accentDeep }}>{contributions.supports_given} supported</Text>
+        <Text style={{ color: tone.chalk }}>{'  ·  '}</Text>
+        {contributions.comments_written} {contributions.comments_written === 1 ? 'comment' : 'comments'}
+      </Text>
     </View>
   );
 }
@@ -285,38 +354,34 @@ function Empty({ text }: { text: string }) {
 }
 
 const styles = StyleSheet.create({
-  header: { paddingTop: 6 },
+  header: { paddingTop: 10 },
   identity: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: metric.gutter,
   },
+  ring: { padding: 3, borderRadius: 999, borderWidth: 2 },
+  edit: { paddingHorizontal: 6 },
   score: {
     marginHorizontal: metric.gutter,
-    marginTop: 18,
-    paddingVertical: 13,
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
+    marginTop: 22,
+    padding: 18,
+    borderRadius: 20,
   },
-  scoreRow: { flexDirection: 'row', alignItems: 'baseline' },
-  edit: {
-    marginHorizontal: metric.gutter, marginTop: 16, height: 38,
-    borderWidth: 1, borderRadius: metric.radius,
-    alignItems: 'center', justifyContent: 'center',
+  scoreHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  standing: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999 },
+  actions: { flexDirection: 'row', gap: 10, marginTop: 16 },
+  action: {
+    flex: 1, height: 50, borderRadius: 14,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
   },
-  stats: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    paddingHorizontal: metric.gutter - 4,
-    paddingTop: 14,
-    paddingBottom: 4,
-  },
-  stat: {
-    width: '33.33%',
-    paddingVertical: 9,
-    paddingHorizontal: 4,
-  },
-  tabs: { flexDirection: 'row', borderBottomWidth: 1, marginTop: 10 },
+  journey: { paddingHorizontal: metric.gutter, paddingTop: 28, paddingBottom: 8 },
+  track: { flexDirection: 'row', alignItems: 'center', marginTop: 18, paddingHorizontal: 1 },
+  node: { width: 14, height: 14, borderRadius: 7, borderWidth: 2 },
+  segment: { flex: 1, height: 2 },
+  stops: { flexDirection: 'row', marginTop: 12 },
+  rule: { height: StyleSheet.hairlineWidth, marginVertical: 22 },
+  tabs: { flexDirection: 'row', borderBottomWidth: 1, marginTop: 18 },
   tab: { flex: 1, alignItems: 'center' },
   indicator: { height: 3, width: 30, borderRadius: 2, marginTop: 8 },
 });

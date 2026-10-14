@@ -1,5 +1,6 @@
-import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import { useNavigation, useRouter } from 'expo-router';
+import type { NativeStackNavigationProp } from 'expo-router/native-stack';
+import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useServices } from '../src/data/context';
 import { metric, type as t, useTone } from '../src/theme/tokens';
@@ -25,6 +26,18 @@ export default function Auth() {
   const [sent, setSent] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const navigation = useNavigation<NativeStackNavigationProp<Record<string, undefined>>>();
+  const phoneField = useRef<TextInput>(null);
+
+  // autoFocus raised the keyboard while the screen was still sliding in, and
+  // the two animations fighting is what made the push stutter.
+  useEffect(
+    () =>
+      navigation.addListener('transitionEnd', (e) => {
+        if (!e.data.closing) phoneField.current?.focus();
+      }),
+    [navigation],
+  );
 
   const submit = async () => {
     setBusy(true);
@@ -56,6 +69,7 @@ export default function Auth() {
       <View style={[styles.field, styles.phone, { backgroundColor: tone.surface, borderColor: tone.hairline }]}>
         <Text style={[styles.prefix, { color: sent ? tone.chalk : tone.ink }]}>{COUNTRY_CODE}</Text>
         <TextInput
+          ref={phoneField}
           style={[styles.digits, { color: sent ? tone.chalk : tone.ink }]}
           value={phone}
           onChangeText={(text) => setPhone(nationalNumber(text))}
@@ -65,7 +79,6 @@ export default function Auth() {
           placeholder="10-digit number"
           placeholderTextColor={tone.chalk}
           editable={!sent}
-          autoFocus
         />
       </View>
       {sent && (

@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { ArrowUp, Eye } from 'lucide-react-native';
+import { ArrowUp, ChevronRight, Eye } from 'lucide-react-native';
 import React, { useCallback, useRef, useState } from 'react';
 import {
   Dimensions,
@@ -15,7 +15,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useServices } from '../../data/context';
 import { markOnboardingSeen } from '../../data/startup';
 import { metric, type as t, useTone } from '../../theme/tokens';
-import { ActionsArt, ConfirmArt, EscalateArt, LocationArt, ReportArt, hue } from './art';
+import {
+  ActionsArt, ConfirmArt, EscalateArt, GradientFill, LocationArt, ReportArt, WelcomeArt, hue,
+} from './art';
 
 type Slide = {
   key: string;
@@ -24,6 +26,7 @@ type Slide = {
   colour: string;
   title: string;
   body: string | (() => React.ReactElement);
+  motto?: boolean;
 };
 
 function ActionsLegend() {
@@ -58,6 +61,15 @@ function ActionsLegend() {
 }
 
 const SLIDES: Slide[] = [
+  {
+    key: 'welcome',
+    art: WelcomeArt,
+    eyebrow: '',
+    colour: hue.mint,
+    title: 'विकास की ओर',
+    body: '',
+    motto: true,
+  },
   {
     key: 'report',
     art: ReportArt,
@@ -166,12 +178,20 @@ export function OnboardingScreen() {
         {SLIDES.map((slide) => (
           <View key={slide.key} style={[styles.slide, { width }]}>
             <View style={styles.art}>{slide.art()}</View>
-            <Text style={[t.meta(12, '600', 1), styles.eyebrow, { color: slide.colour }]}>
-              {slide.eyebrow}
+            {!!slide.eyebrow && (
+              <Text style={[t.meta(13, '500', 0.2), styles.eyebrow, { color: slide.colour }]}>
+                {slide.eyebrow}
+              </Text>
+            )}
+            <Text
+              style={[
+                slide.motto ? styles.motto : t.display(26, '600'),
+                { color: tone.ink },
+              ]}>
+              {slide.title}
             </Text>
-            <Text style={[t.display(26, '600'), { color: tone.ink }]}>{slide.title}</Text>
             {typeof slide.body === 'string' ? (
-              <Text style={[t.body(15.5), { color: tone.chalk, marginTop: 10 }]}>{slide.body}</Text>
+              !!slide.body && <Text style={[t.body(15.5), { color: tone.chalk, marginTop: 10 }]}>{slide.body}</Text>
             ) : (
               slide.body()
             )}
@@ -181,34 +201,49 @@ export function OnboardingScreen() {
 
       <SafeAreaView edges={['bottom']}>
         <View style={styles.bottom}>
-          <View style={styles.dots}>
-            {SLIDES.map((slide, i) => (
-              <View
-                key={slide.key}
-                style={[
-                  styles.dot,
-                  {
-                    backgroundColor: i === index ? SLIDES[index].colour : `${tone.ink}22`,
-                    width: i === index ? 20 : 7,
-                  },
-                ]}
-              />
-            ))}
-          </View>
-
-          <Pressable
-            onPress={advance}
-            disabled={busy}
-            style={[styles.cta, { backgroundColor: tone.accent, opacity: busy ? 0.6 : 1 }]}>
-            <Text style={[t.display(16, '500'), { color: '#000' }]}>
-              {last ? (busy ? 'One moment…' : 'Enable location') : 'Next'}
-            </Text>
-          </Pressable>
-
-          {last && (
-            <Pressable onPress={finish} hitSlop={8} style={styles.later}>
-              <Text style={[t.meta(13, '500', 0.2), { color: tone.chalk }]}>Not now</Text>
-            </Pressable>
+          {last ? (
+            <>
+              <Pressable
+                onPress={advance}
+                disabled={busy}
+                style={({ pressed }) => [
+                  styles.pill,
+                  { opacity: busy ? 0.6 : 1, transform: [{ scale: pressed ? 0.97 : 1 }] },
+                ]}>
+                <GradientFill id="cta-pill" radius={30} />
+                <Text style={[t.display(16, '500'), { color: '#000' }]}>
+                  {busy ? 'One moment…' : 'Enable location'}
+                </Text>
+                {!busy && <ChevronRight size={20} color="#000" strokeWidth={2.4} style={{ marginLeft: 4 }} />}
+              </Pressable>
+              <Pressable onPress={finish} hitSlop={8} style={styles.later}>
+                <Text style={[t.meta(13, '500', 0.2), { color: tone.chalk }]}>Not now</Text>
+              </Pressable>
+            </>
+          ) : (
+            <View style={styles.footer}>
+              <View style={styles.dots}>
+                {SLIDES.map((slide, i) => (
+                  <View
+                    key={slide.key}
+                    style={[
+                      styles.dot,
+                      {
+                        backgroundColor: i === index ? SLIDES[index].colour : `${tone.ink}22`,
+                        width: i === index ? 22 : 8,
+                      },
+                    ]}
+                  />
+                ))}
+              </View>
+              <Pressable
+                onPress={advance}
+                accessibilityLabel="Next"
+                style={({ pressed }) => [styles.next, { transform: [{ scale: pressed ? 0.92 : 1 }] }]}>
+                <GradientFill id="cta-next" radius={32} />
+                <ChevronRight size={28} color="#000" strokeWidth={2.4} />
+              </Pressable>
+            </View>
           )}
         </View>
       </SafeAreaView>
@@ -223,15 +258,18 @@ const styles = StyleSheet.create({
   },
   slide: { paddingHorizontal: metric.gutter, paddingTop: 8 },
   art: { marginBottom: 26 },
-  eyebrow: { textTransform: 'uppercase', marginBottom: 8 },
+  eyebrow: { marginBottom: 6 },
   legendRow: { flexDirection: 'row', alignItems: 'flex-start' },
   legendIcon: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
-  bottom: { paddingHorizontal: metric.gutter, paddingBottom: 8 },
-  dots: { flexDirection: 'row', justifyContent: 'center', marginBottom: 22 },
-  dot: { height: 7, borderRadius: 4, marginHorizontal: 3 },
-  cta: {
-    height: 52, borderRadius: metric.radius,
+  bottom: { paddingHorizontal: metric.gutter, paddingBottom: 8, paddingTop: 12 },
+  footer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 14 },
+  dots: { flexDirection: 'row' },
+  dot: { height: 8, borderRadius: 4, marginRight: 6 },
+  next: { width: 64, height: 64, alignItems: 'center', justifyContent: 'center' },
+  pill: {
+    height: 60, flexDirection: 'row',
     alignItems: 'center', justifyContent: 'center',
   },
   later: { alignItems: 'center', paddingVertical: 14 },
+  motto: { fontSize: 40, lineHeight: 58, fontWeight: '600', textAlign: 'center', marginTop: 8 },
 });

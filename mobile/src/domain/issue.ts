@@ -149,7 +149,7 @@ export const categoryLabel: Record<Category, string> = {
 
 /** Only the top band is named, and only it earns the hazard red. */
 export const severityLabel: Record<Severity, string> = {
-  high: 'Critical',
+  high: 'High',
   medium: 'Medium',
   low: 'Low',
 };

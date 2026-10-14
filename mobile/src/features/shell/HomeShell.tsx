@@ -1,5 +1,5 @@
 import { useFocusEffect, useRouter } from 'expo-router';
-import { Plus, User } from 'lucide-react-native';
+import { Camera, User } from 'lucide-react-native';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -24,6 +24,7 @@ const SECTIONS: NavIconName[] = ['house', 'search', 'chart', 'bell'];
 const DOCK_HEIGHT = 52;
 
 const ICON = 25;
+const FAB_MARGIN = 20;
 const INDICATOR = 34;
 
 export function HomeShell() {
@@ -58,8 +59,8 @@ function Shell() {
   const signedIn = Boolean(auth.currentUserId());
   const unread = useUnreadCount(signedIn);
   const me = useProfile(signedIn ? auth.currentUserId() : null);
-
   usePushNotifications(signedIn, unread);
+
   // The camera opens before the composer, so backing out of it leaves the
   // person on the feed rather than in an empty report they have to dismiss.
   const capturing = useRef(false);
@@ -207,13 +208,18 @@ function Shell() {
         style={[
           styles.fab,
           {
+            bottom: (insets.bottom || DOCK_HEIGHT) + FAB_MARGIN,
             transform: [{ translateY: dockOffset }],
           },
         ]}>
         <Pressable
           onPress={startReport}
-          style={[styles.fabButton, { backgroundColor: tone.accent }]}>
-          <Plus size={30} color="#000" />
+          accessibilityLabel="Report a problem"
+          style={({ pressed }) => [
+            styles.fabButton,
+            { backgroundColor: tone.accent, transform: [{ scale: pressed ? 0.94 : 1 }] },
+          ]}>
+          <Camera size={26} color="#000" strokeWidth={2.2} />
         </Pressable>
       </Animated.View>
 
@@ -335,7 +341,7 @@ const styles = StyleSheet.create({
     position: 'absolute', left: 0, bottom: 0,
     height: 3, width: INDICATOR, borderRadius: 2,
   },
-  fab: { position: 'absolute', right: 20, bottom: 90, width: 58, height: 58 },
+  fab: { position: 'absolute', right: FAB_MARGIN, width: 58, height: 58 },
   fabButton: {
     width: 58, height: 58, borderRadius: 29,
     alignItems: 'center', justifyContent: 'center',

@@ -34,6 +34,14 @@ export const CONTRIBUTION_LABELS: Record<keyof Contributions, string> = {
 /** Mirrors the server's weights. Shown so the score is never a black box. */
 export const REPUTATION_WEIGHTS = { upvote: 1, post: 2, resolution: 5 } as const;
 
+/** A plain-language tier for the score, so a number has a name to grow into. */
+export const standing = (reputation: number): string => {
+  if (reputation >= 200) return 'Local hero';
+  if (reputation >= 50) return 'Trusted neighbour';
+  if (reputation >= 10) return 'Regular';
+  return 'New member';
+};
+
 export const initials = (name: string): string => {
   const parts = name.trim().split(/\s+/).filter(Boolean);
   if (!parts.length) return '?';

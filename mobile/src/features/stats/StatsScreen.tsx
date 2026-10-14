@@ -1,6 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
-import { ChevronRight } from 'lucide-react-native';
+import { Camera, ChevronRight, HandHeart, Mail, Megaphone } from 'lucide-react-native';
+import type { LucideIcon } from 'lucide-react-native';
 import React, { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -17,7 +18,7 @@ import Svg, { Line, Rect } from 'react-native-svg';
 import { useLocation, useStats, useTopContributors } from '../../data/queries';
 import { categoryLabel, shortDay } from '../../domain/issue';
 import type { Period, Stats, StatsArea, StatsCategory, StatsPoint, StatsScope, StatsWeek } from '../../domain/stats';
-import { PERIODS, periodLabel } from '../../domain/stats';
+import { PERIODS, compactCount, periodLabel } from '../../domain/stats';
 import { metric, type Tones, type as t, useTone } from '../../theme/tokens';
 import { CategoryGlyph } from '../issues/glyphs';
 import { Centered, LoadFailed } from '../issues/NearbyFeed';
@@ -125,8 +126,8 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-const count = (n: number, one: string, many: string) =>
-  ({ value: n.toLocaleString('en-IN'), label: n === 1 ? one : many });
+const count = (icon: LucideIcon, n: number, one: string, many: string) =>
+  ({ icon, value: compactCount(n), label: n === 1 ? one : many });
 
 function Hero({ stats, onChoose }: { stats: Stats; onChoose: (slug: string) => void }) {
   const tone = useTone();
@@ -135,9 +136,9 @@ function Hero({ stats, onChoose }: { stats: Stats; onChoose: (slug: string) => v
       <AreaPicker current={stats.area} onChoose={onChoose} />
       <View style={styles.headline}>
         <Text style={[t.display(64, '600'), { color: tone.ink }]}>
-          {stats.totals.resolved.toLocaleString('en-IN')}
+          {compactCount(stats.totals.resolved)}
         </Text>
-        <Text style={[t.display(20, '500'), { color: tone.accentDeep }]}>Fixed So Far</Text>
+        <Text style={[t.display(20, '500'), { color: tone.accentDeep }]}>fixed so far</Text>
       </View>
     </View>
   );
@@ -147,17 +148,24 @@ function Tiles({ stats }: { stats: Stats }) {
   const tone = useTone();
   const { totals } = stats;
   const tiles = [
-    count(totals.reported, 'issue submitted', 'issues submitted'),
-    count(totals.contributors, 'helping hand', 'helping hands'),
-    count(totals.photos, 'photo submitted', 'photos submitted'),
-    count(totals.emails_sent, 'email sent', 'emails sent'),
+    count(Megaphone, totals.reported, 'report', 'reports'),
+    count(HandHeart, totals.contributors, 'helper', 'helpers'),
+    count(Camera, totals.photos, 'photo', 'photos'),
+    count(Mail, totals.emails_sent, 'email sent', 'emails sent'),
   ];
   return (
     <View style={[styles.tiles, { borderBottomColor: tone.hairline }]}>
       {tiles.map((tile) => (
-        <View key={tile.label} style={[styles.tile, { backgroundColor: tone.surface }]}>
-          <Text style={[t.display(26, '600'), { color: tone.ink }]}>{tile.value}</Text>
-          <Text style={[t.meta(12, '500', 0), { color: tone.chalk, marginTop: 2 }]}>{tile.label}</Text>
+        <View
+          key={tile.label}
+          style={[styles.tile, { backgroundColor: tone.surface }]}>
+          <tile.icon size={22} color={tone.chalk} strokeWidth={1.8} />
+          <View style={styles.tileText}>
+            <Text style={[t.display(22, '600'), { color: tone.ink }]}>{tile.value}</Text>
+            <Text numberOfLines={1} style={[t.meta(13, '500', 0), { color: tone.chalk, marginTop: 1 }]}>
+              {tile.label}
+            </Text>
+          </View>
         </View>
       ))}
     </View>
@@ -202,7 +210,7 @@ function FixMap({
   if (!points.length) return null;
 
   return (
-    <Section title="Where things got fixed">
+    <Section title="Map">
       <Pressable onPress={onOpen} style={[styles.mapFrame, { borderColor: tone.hairline }]}>
         <View pointerEvents="none" style={StyleSheet.absoluteFill}>
           <MapView
@@ -246,8 +254,8 @@ function Funnel({ stats }: { stats: Stats }) {
   const { totals } = stats;
   const stages = [
     { label: 'Reported', value: totals.reported, colour: tone.pending },
-    { label: 'Confirmed by neighbours', value: totals.confirmed, colour: `${tone.accent}8c` },
-    { label: 'Raised with the authority', value: totals.raised, colour: tone.progress },
+    { label: 'Confirmed', value: totals.confirmed, colour: `${tone.accent}8c` },
+    { label: 'Sent to authority', value: totals.raised, colour: tone.progress },
     { label: 'Fixed', value: totals.resolved, colour: tone.accent },
   ];
   return (
@@ -259,7 +267,7 @@ function Funnel({ stats }: { stats: Stats }) {
             <View style={styles.stageHead}>
               <Text style={[t.body(14), { color: tone.ink, flex: 1 }]}>{stage.label}</Text>
               <Text style={[t.meta(13, '600', 0), { color: tone.ink }]}>
-                {stage.value.toLocaleString('en-IN')}
+                {compactCount(stage.value)}
               </Text>
               <Text style={[t.meta(12, '500', 0), styles.stageShare, { color: tone.chalk }]}>
                 {percent(share)}
@@ -350,7 +358,7 @@ function Categories({ rows }: { rows: StatsCategory[] }) {
   const tone = useTone();
   const shown = rows.slice(0, CATEGORY_ROWS);
   return (
-    <Section title="What gets reported">
+    <Section title="By category">
       {shown.map((row) => (
         <View key={row.category} style={styles.category}>
           <View style={[styles.glyph, { backgroundColor: tone.surface }]}>
@@ -381,9 +389,9 @@ function Categories({ rows }: { rows: StatsCategory[] }) {
 }
 
 const EMPTY_BOARD: Record<Period, string> = {
-  day: 'Nobody has reported or backed anything yet today.',
-  month: 'Nobody has reported or backed anything yet this month.',
-  year: 'Nobody has reported or backed anything yet this year.',
+  day: 'No activity today.',
+  month: 'No activity this month.',
+  year: 'No activity this year.',
 };
 
 function Contributors({ scope }: { scope: StatsScope }) {
@@ -401,7 +409,7 @@ function Contributors({ scope }: { scope: StatsScope }) {
       ) : board.isError ? (
         <Pressable onPress={() => board.refetch()} style={{ paddingVertical: 18 }}>
           <Text style={[t.body(14), { color: tone.chalk }]}>
-            Could not load the board. <Text style={{ color: tone.accentDeep }}>Try again</Text>
+            Could not load. <Text style={{ color: tone.accentDeep }}>Try again</Text>
           </Text>
         </Pressable>
       ) : !rows.length ? (
@@ -459,10 +467,13 @@ const styles = StyleSheet.create({
   tile: {
     flexGrow: 1,
     flexBasis: '40%',
-    borderRadius: metric.radius,
-    paddingVertical: 14,
-    paddingHorizontal: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 14,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
   },
+  tileText: { marginLeft: 14, flexShrink: 1 },
   section: { paddingHorizontal: metric.gutter, paddingTop: 30 },
   mapFrame: {
     height: 210,

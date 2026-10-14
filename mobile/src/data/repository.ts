@@ -103,6 +103,8 @@ export interface AuthGateway {
 
 export interface LocationService {
   current(): Promise<GeoPoint>;
+  /** A short street-and-area line for a point, or null when nothing is known. */
+  describe(point: GeoPoint): Promise<string | null>;
 }
 
 export interface PhotoSource {
