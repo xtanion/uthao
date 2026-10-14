@@ -6,6 +6,7 @@ import React, { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
+  Linking,
   Pressable,
   RefreshControl,
   StyleSheet,
@@ -14,7 +15,7 @@ import {
   View,
 } from 'react-native';
 import MapView, { Circle as GeoCircle } from 'react-native-maps';
-import Svg, { Line, Rect } from 'react-native-svg';
+import Svg, { Line, Path, Rect } from 'react-native-svg';
 import { useLocation, useStats, useTopContributors } from '../../data/queries';
 import { categoryLabel, shortDay } from '../../domain/issue';
 import type { Period, Stats, StatsArea, StatsCategory, StatsPoint, StatsScope, StatsWeek } from '../../domain/stats';
@@ -27,6 +28,7 @@ import { useChromeOnScroll, useChromeSpacing } from '../shell/chrome';
 import { AreaPicker } from './AreaPicker';
 
 const CATEGORY_ROWS = 6;
+const SOURCE_URL = 'https://github.com/xtanion/uthao';
 
 const percent = (fraction: number) => `${Math.round(fraction * 100)}%`;
 
@@ -79,6 +81,7 @@ export function StatsScreen({ onOpenMap }: { onOpenMap: () => void }) {
           </Text>
         )}
       </View>
+      <Source />
     </Animated.ScrollView>
   );
 }
@@ -451,7 +454,42 @@ function Contributors({ scope }: { scope: StatsScope }) {
   );
 }
 
+function GitHubMark({ size, color }: { size: number; color: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 16 16">
+      <Path
+        fill={color}
+        d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"
+      />
+    </Svg>
+  );
+}
+
+/** The code behind the numbers, for anyone who wants to check how they are made. */
+function Source() {
+  const tone = useTone();
+  return (
+    <Pressable
+      onPress={() => Linking.openURL(SOURCE_URL)}
+      accessibilityRole="link"
+      style={({ pressed }) => [styles.source, { opacity: pressed ? 0.6 : 1 }]}>
+      <GitHubMark size={22} color={tone.chalk} />
+      <View style={{ marginLeft: 12, flex: 1 }}>
+        <Text style={[t.body(14), { color: tone.chalk }]}>fihy is open source</Text>
+        <Text style={[t.display(15, '500'), { color: tone.accentDeep, marginTop: 2 }]}>
+          See the code on GitHub
+        </Text>
+      </View>
+      <ChevronRight size={18} color={tone.chalk} />
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
+  source: {
+    flexDirection: 'row', alignItems: 'center',
+    marginHorizontal: metric.gutter, marginTop: 40, paddingVertical: 16,
+  },
   hero: { paddingHorizontal: metric.gutter, paddingTop: 20 },
   headline: { flexDirection: 'row', alignItems: 'baseline', gap: 12, marginTop: 10 },
   empty: { paddingHorizontal: metric.gutter, paddingTop: 28 },

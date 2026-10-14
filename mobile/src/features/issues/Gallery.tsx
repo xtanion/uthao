@@ -1,3 +1,4 @@
+import { useRouter } from 'expo-router';
 import { Camera } from 'lucide-react-native';
 import React, { useState } from 'react';
 import {
@@ -28,6 +29,7 @@ const { width } = Dimensions.get('window');
  */
 export function Gallery({ photos, onAdd }: { photos: Photo[]; onAdd?: () => void }) {
   const tone = useTone();
+  const router = useRouter();
   const [open, setOpen] = useState<number | null>(null);
 
   if (!photos.length) return null;
@@ -44,8 +46,8 @@ export function Gallery({ photos, onAdd }: { photos: Photo[]; onAdd?: () => void
             <Camera size={28} color={tone.chalk} />
           </View>
         )}
-        <Credit photo={lead} />
       </Pressable>
+      <Credit photo={lead} />
 
       {(rest.length > 0 || onAdd) && (
         <ScrollView
@@ -61,13 +63,16 @@ export function Gallery({ photos, onAdd }: { photos: Photo[]; onAdd?: () => void
                   <Camera size={18} color={tone.chalk} />
                 </View>
               )}
-              <View style={styles.tileAvatar}>
+              <Pressable
+                onPress={() => router.push(`/users/${photo.contributor.id}`)}
+                hitSlop={6}
+                style={styles.tileAvatar}>
                 <Avatar
                   id={photo.contributor.id}
                   name={photo.contributor.display_name}
                   size={20}
                 />
-              </View>
+              </Pressable>
             </Pressable>
           ))}
 
@@ -89,12 +94,18 @@ export function Gallery({ photos, onAdd }: { photos: Photo[]; onAdd?: () => void
 
 function Credit({ photo }: { photo: Photo }) {
   const tone = useTone();
+  const router = useRouter();
   return (
     <View style={styles.credit}>
-      <Avatar id={photo.contributor.id} name={photo.contributor.display_name} size={22} />
-      <Text style={[t.meta(12, '600', 0), { color: tone.ink, marginLeft: 7 }]}>
-        {photo.contributor.display_name}
-      </Text>
+      <Pressable
+        onPress={() => router.push(`/users/${photo.contributor.id}`)}
+        hitSlop={6}
+        style={styles.creditPerson}>
+        <Avatar id={photo.contributor.id} name={photo.contributor.display_name} size={22} />
+        <Text style={[t.meta(12, '600', 0), { color: tone.ink, marginLeft: 7 }]}>
+          {photo.contributor.display_name}
+        </Text>
+      </Pressable>
       <Text style={[t.meta(12, '500', 0), { color: tone.chalk, marginLeft: 6 }]}>
         {photo.from_report ? 'reported this' : 'added this'}
       </Text>
@@ -114,7 +125,7 @@ function PhotoViewer({
   index: number | null;
   onClose: () => void;
 }) {
-  const tone = useTone();
+  const router = useRouter();
   if (index === null) return null;
   return (
     <Modal visible transparent animationType="fade" onRequestClose={onClose}>
@@ -129,9 +140,18 @@ function PhotoViewer({
               {!photo.url.startsWith('demo://') && (
                 <Image source={{ uri: photo.url }} style={styles.viewerImage} resizeMode="contain" />
               )}
-              <Text style={[t.meta(12, '600', 0), { color: '#fff', textAlign: 'center', marginTop: 14 }]}>
-                {photo.contributor.display_name}
-              </Text>
+              <Pressable
+                onPress={() => {
+                  onClose();
+                  router.push(`/users/${photo.contributor.id}`);
+                }}
+                hitSlop={8}
+                style={styles.viewerPerson}>
+                <Avatar id={photo.contributor.id} name={photo.contributor.display_name} size={22} />
+                <Text style={[t.meta(12, '600', 0), { color: '#fff', marginLeft: 7 }]}>
+                  {photo.contributor.display_name}
+                </Text>
+              </Pressable>
               <Text style={[t.body(12), { color: '#ffffff99', textAlign: 'center', marginTop: 3 }]}>
                 {photo.from_report ? 'Reported this' : 'Added this'}
               </Text>
@@ -147,6 +167,8 @@ const styles = StyleSheet.create({
   lead: { width: '100%', height: 230, borderRadius: metric.radius },
   placeholder: { alignItems: 'center', justifyContent: 'center' },
   credit: { flexDirection: 'row', alignItems: 'center', marginTop: 10 },
+  creditPerson: { flexDirection: 'row', alignItems: 'center' },
+  viewerPerson: { flexDirection: 'row', alignItems: 'center', alignSelf: 'center', marginTop: 14 },
   strip: { paddingTop: 12, paddingRight: 4 },
   tileWrap: { marginRight: 8 },
   tile: { width: 74, height: 74, borderRadius: 10 },

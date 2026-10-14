@@ -330,7 +330,23 @@ function GoingSheet({ row, onClose }: { row: FixDate | null; onClose: () => void
             {row.vote_count === 1
               ? '1 person is going.'
               : `${row.vote_count} people are going.`}
-            {row.mine ? ' You put this day up.' : ` ${row.proposed_by.display_name} put it up.`}
+            {row.mine ? (
+              ' You put this day up.'
+            ) : (
+              <>
+                {' '}
+                <Text
+                  suppressHighlighting
+                  onPress={() => {
+                    onClose();
+                    router.push(`/users/${row.proposed_by.id}`);
+                  }}
+                  style={{ color: tone.ink, fontWeight: '600' }}>
+                  {row.proposed_by.display_name}
+                </Text>
+                {' put it up.'}
+              </>
+            )}
           </Text>
         </View>
 

@@ -1,7 +1,8 @@
 import { useRouter } from 'expo-router';
-import { ArrowUp, ChevronRight, Eye } from 'lucide-react-native';
-import React, { useCallback, useRef, useState } from 'react';
+import { ChevronRight } from 'lucide-react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  Animated,
   Dimensions,
   NativeScrollEvent,
   NativeSyntheticEvent,
@@ -15,102 +16,39 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useServices } from '../../data/context';
 import { markOnboardingSeen } from '../../data/startup';
 import { metric, type as t, useTone } from '../../theme/tokens';
-import {
-  ActionsArt, ConfirmArt, EscalateArt, GradientFill, LocationArt, ReportArt, WelcomeArt, hue,
-} from './art';
+import { useReducedMotion } from '../shell/motion';
+import { GradientFill, LocationPulse, LyricDrift, STEPS, StepDisc, useStep } from './art';
 
-type Slide = {
-  key: string;
-  art: () => React.ReactElement;
-  eyebrow: string;
-  colour: string;
-  title: string;
-  body: string | (() => React.ReactElement);
-  motto?: boolean;
-};
+const PAGES = 3;
 
-function ActionsLegend() {
+function Headline({ children, sub }: { children: React.ReactNode; sub?: string }) {
   const tone = useTone();
-  const rows = [
-    {
-      icon: <ArrowUp size={16} color={tone.accentDeep} />,
-      wash: `${tone.accent}2e`,
-      name: 'Support',
-      text: 'Open a report and add what you saw, a line or a photo. The arrow counts everyone who did.',
-    },
-    {
-      icon: <Eye size={16} color={hue.sky} />,
-      wash: `${hue.sky}2e`,
-      name: 'Seen it',
-      text: 'One tap to say you have walked past it too. Tap again to take it back.',
-    },
-  ];
   return (
-    <View style={{ marginTop: 14, gap: 14 }}>
-      {rows.map((row) => (
-        <View key={row.name} style={styles.legendRow}>
-          <View style={[styles.legendIcon, { backgroundColor: row.wash }]}>{row.icon}</View>
-          <View style={{ flex: 1, marginLeft: 12 }}>
-            <Text style={[t.display(15, '600'), { color: tone.ink }]}>{row.name}</Text>
-            <Text style={[t.body(14), { color: tone.chalk, marginTop: 2 }]}>{row.text}</Text>
-          </View>
-        </View>
-      ))}
+    <View style={styles.headline}>
+      <Text style={[styles.big, { color: tone.ink }]}>{children}</Text>
+      {sub && <Text style={[t.body(15), { color: tone.chalk, marginTop: 10 }]}>{sub}</Text>}
     </View>
   );
 }
 
-const SLIDES: Slide[] = [
-  {
-    key: 'welcome',
-    art: WelcomeArt,
-    eyebrow: '',
-    colour: hue.mint,
-    title: 'विकास की ओर',
-    body: '',
-    motto: true,
-  },
-  {
-    key: 'report',
-    art: ReportArt,
-    eyebrow: 'Report',
-    colour: hue.coral,
-    title: 'See something broken? Snap it.',
-    body: 'A missing manhole cover, a dark street, a drain that floods every monsoon. One photo and a line, and it is on the map for everyone nearby.',
-  },
-  {
-    key: 'actions',
-    art: ActionsArt,
-    eyebrow: 'On every report',
-    colour: hue.sky,
-    title: 'Two ways to back it up',
-    body: ActionsLegend,
-  },
-  {
-    key: 'confirm',
-    art: ConfirmArt,
-    eyebrow: 'Confirm',
-    colour: hue.violet,
-    title: 'Photos make it count',
-    body: 'When two other people photograph the same spot, the report is confirmed. Proof from several neighbours is much harder to ignore.',
-  },
-  {
-    key: 'escalate',
-    art: EscalateArt,
-    eyebrow: 'Escalate',
-    colour: hue.mint,
-    title: 'Then it goes to the ward',
-    body: 'Confirmed reports are sent to the authority responsible, and you can read the letter that went out on your behalf. Follow it until it is fixed.',
-  },
-  {
-    key: 'location',
-    art: LocationArt,
-    eyebrow: 'Nearby',
-    colour: hue.amber,
-    title: 'Start with what is near you',
-    body: 'Your location places a report accurately and shows what has already been flagged around you. It is only shared with a report you choose to file.',
-  },
-];
+/** Re-enters whenever its key changes, so a new step's line slides into place. */
+function Rise({ children }: { children: React.ReactNode }) {
+  const still = useReducedMotion();
+  const enter = useRef(new Animated.Value(still ? 1 : 0)).current;
+  useEffect(() => {
+    if (still) return;
+    Animated.timing(enter, { toValue: 1, duration: 320, useNativeDriver: true }).start();
+  }, [still, enter]);
+  return (
+    <Animated.View
+      style={{
+        opacity: enter,
+        transform: [{ translateY: enter.interpolate({ inputRange: [0, 1], outputRange: [10, 0] }) }],
+      }}>
+      {children}
+    </Animated.View>
+  );
+}
 
 export function OnboardingScreen() {
   const tone = useTone();
@@ -119,9 +57,10 @@ export function OnboardingScreen() {
   const scroller = useRef<ScrollView>(null);
   const [index, setIndex] = useState(0);
   const [busy, setBusy] = useState(false);
+  const step = useStep();
   const width = Dimensions.get('window').width;
 
-  const last = index === SLIDES.length - 1;
+  const last = index === PAGES - 1;
 
   const finish = useCallback(async () => {
     await markOnboardingSeen();
@@ -157,7 +96,41 @@ export function OnboardingScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: tone.bg }}>
-      <SafeAreaView edges={['top']}>
+      <ScrollView
+        ref={scroller}
+        horizontal
+        pagingEnabled
+        showsHorizontalScrollIndicator={false}
+        onScroll={onScroll}
+        scrollEventThrottle={16}
+        style={StyleSheet.absoluteFill}>
+        <View style={[styles.page, { width }]}>
+          <LyricDrift />
+          <SafeAreaView edges={['top']} style={{ flex: 1 }} />
+          <Headline>
+            Spot the problem,{'\n'}
+            <Text style={{ color: tone.accentDeep }}>Be the solution.</Text>
+          </Headline>
+        </View>
+
+        <View style={[styles.page, { width }]}>
+          <SafeAreaView edges={['top']} style={{ flex: 1 }}>
+            <StepDisc step={step} />
+          </SafeAreaView>
+          <Rise key={step}>
+            <Headline>{STEPS[step].text}</Headline>
+          </Rise>
+        </View>
+
+        <View style={[styles.page, { width }]}>
+          <SafeAreaView edges={['top']} style={{ flex: 1 }}>
+            <LocationPulse />
+          </SafeAreaView>
+          <Headline sub="Only shared with reports you file.">Start near you.</Headline>
+        </View>
+      </ScrollView>
+
+      <SafeAreaView edges={['top']} style={styles.topBar} pointerEvents="box-none">
         <View style={styles.top}>
           {!last && (
             <Pressable onPress={finish} hitSlop={10}>
@@ -167,39 +140,7 @@ export function OnboardingScreen() {
         </View>
       </SafeAreaView>
 
-      <ScrollView
-        ref={scroller}
-        horizontal
-        pagingEnabled
-        showsHorizontalScrollIndicator={false}
-        onScroll={onScroll}
-        scrollEventThrottle={16}
-        style={{ flex: 1 }}>
-        {SLIDES.map((slide) => (
-          <View key={slide.key} style={[styles.slide, { width }]}>
-            <View style={styles.art}>{slide.art()}</View>
-            {!!slide.eyebrow && (
-              <Text style={[t.meta(13, '500', 0.2), styles.eyebrow, { color: slide.colour }]}>
-                {slide.eyebrow}
-              </Text>
-            )}
-            <Text
-              style={[
-                slide.motto ? styles.motto : t.display(26, '600'),
-                { color: tone.ink },
-              ]}>
-              {slide.title}
-            </Text>
-            {typeof slide.body === 'string' ? (
-              !!slide.body && <Text style={[t.body(15.5), { color: tone.chalk, marginTop: 10 }]}>{slide.body}</Text>
-            ) : (
-              slide.body()
-            )}
-          </View>
-        ))}
-      </ScrollView>
-
-      <SafeAreaView edges={['bottom']}>
+      <SafeAreaView edges={['bottom']} style={styles.bottomBar}>
         <View style={styles.bottom}>
           {last ? (
             <>
@@ -214,7 +155,6 @@ export function OnboardingScreen() {
                 <Text style={[t.display(16, '500'), { color: '#000' }]}>
                   {busy ? 'One moment…' : 'Enable location'}
                 </Text>
-                {!busy && <ChevronRight size={20} color="#000" strokeWidth={2.4} style={{ marginLeft: 4 }} />}
               </Pressable>
               <Pressable onPress={finish} hitSlop={8} style={styles.later}>
                 <Text style={[t.meta(13, '500', 0.2), { color: tone.chalk }]}>Not now</Text>
@@ -223,13 +163,13 @@ export function OnboardingScreen() {
           ) : (
             <View style={styles.footer}>
               <View style={styles.dots}>
-                {SLIDES.map((slide, i) => (
+                {Array.from({ length: PAGES }, (_, i) => (
                   <View
-                    key={slide.key}
+                    key={i}
                     style={[
                       styles.dot,
                       {
-                        backgroundColor: i === index ? SLIDES[index].colour : `${tone.ink}22`,
+                        backgroundColor: i === index ? tone.accent : `${tone.ink}22`,
                         width: i === index ? 22 : 8,
                       },
                     ]}
@@ -251,25 +191,23 @@ export function OnboardingScreen() {
   );
 }
 
+const BOTTOM_CLEARANCE = 176;
+
 const styles = StyleSheet.create({
+  page: { flex: 1, paddingBottom: BOTTOM_CLEARANCE },
+  headline: { paddingHorizontal: metric.gutter },
+  big: { fontSize: 42, lineHeight: 48, fontWeight: '600', letterSpacing: -1 },
+  topBar: { position: 'absolute', top: 0, left: 0, right: 0 },
   top: {
     height: 40, paddingHorizontal: metric.gutter,
     alignItems: 'flex-end', justifyContent: 'center',
   },
-  slide: { paddingHorizontal: metric.gutter, paddingTop: 8 },
-  art: { marginBottom: 26 },
-  eyebrow: { marginBottom: 6 },
-  legendRow: { flexDirection: 'row', alignItems: 'flex-start' },
-  legendIcon: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
+  bottomBar: { position: 'absolute', left: 0, right: 0, bottom: 0 },
   bottom: { paddingHorizontal: metric.gutter, paddingBottom: 8, paddingTop: 12 },
   footer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 14 },
   dots: { flexDirection: 'row' },
   dot: { height: 8, borderRadius: 4, marginRight: 6 },
   next: { width: 64, height: 64, alignItems: 'center', justifyContent: 'center' },
-  pill: {
-    height: 60, flexDirection: 'row',
-    alignItems: 'center', justifyContent: 'center',
-  },
+  pill: { height: 60, alignItems: 'center', justifyContent: 'center' },
   later: { alignItems: 'center', paddingVertical: 14 },
-  motto: { fontSize: 40, lineHeight: 58, fontWeight: '600', textAlign: 'center', marginTop: 8 },
 });

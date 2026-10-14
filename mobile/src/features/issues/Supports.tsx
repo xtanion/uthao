@@ -1,3 +1,4 @@
+import { useRouter } from 'expo-router';
 import { Camera, X } from 'lucide-react-native';
 import React, { useState } from 'react';
 import {
@@ -71,17 +72,23 @@ export function SupportList({
 
 function SupportRow({ support }: { support: Support }) {
   const tone = useTone();
+  const router = useRouter();
   const usable = (url: string) => !url.startsWith('demo://');
+  const openAuthor = () => router.push(`/users/${support.author.id}`);
 
   return (
     <View style={[styles.row, { borderTopColor: tone.hairline }]}>
-      <Avatar id={support.author.id} name={support.author.display_name} size={34} />
+      <Pressable onPress={openAuthor} hitSlop={4}>
+        <Avatar id={support.author.id} name={support.author.display_name} size={34} />
+      </Pressable>
 
       <View style={{ flex: 1, marginLeft: 11 }}>
         <View style={styles.head}>
-          <Text style={[t.meta(13, '600', 0), { color: tone.ink }]}>
-            {support.author.display_name}
-          </Text>
+          <Pressable onPress={openAuthor} hitSlop={6}>
+            <Text style={[t.meta(13, '600', 0), { color: tone.ink }]}>
+              {support.author.display_name}
+            </Text>
+          </Pressable>
           {support.author_is_reporter && (
             <View style={[styles.badge, { backgroundColor: `${tone.accent}2e` }]}>
               <Text style={[t.meta(10, '700', 0), { color: tone.accentDeep }]}>Reporter</Text>
