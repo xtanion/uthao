@@ -27,7 +27,7 @@ const ScrollList = Animated.createAnimatedComponent(
   FlatList,
 ) as unknown as typeof FlatList;
 
-export function NearbyFeed({ point }: { point: GeoPoint }) {
+export function NearbyFeed({ point }: { point: GeoPoint | null }) {
   const tone = useTone();
   const router = useRouter();
   const { auth } = useServices();
@@ -52,8 +52,10 @@ export function NearbyFeed({ point }: { point: GeoPoint }) {
     [auth, confirm, router],
   );
 
-  if (feed.isPending) return <Centered><ActivityIndicator color={tone.accentDeep} /></Centered>;
-  if (feed.isError) return <LoadFailed error={feed.error} onRetry={feed.refetch} />;
+  if (!feed.data && (feed.isPending || feed.isFetching)) {
+    return <Centered><ActivityIndicator color={tone.accentDeep} /></Centered>;
+  }
+  if (feed.isError && !feed.data) return <LoadFailed error={feed.error} onRetry={feed.refetch} />;
   if (!issues.length) {
     return (
       <Notice
@@ -76,7 +78,8 @@ export function NearbyFeed({ point }: { point: GeoPoint }) {
       onEndReached={() => feed.hasNextPage && !feed.isFetchingNextPage && feed.fetchNextPage()}
       refreshControl={
         <RefreshControl
-          refreshing={feed.isRefetching}
+          // Also spins while a cached feed is being replaced on launch.
+          refreshing={feed.isRefetching || (feed.isPlaceholderData && feed.isFetching)}
           onRefresh={feed.refetch}
           tintColor={tone.accentDeep}
           progressViewOffset={spacing.paddingTop}
