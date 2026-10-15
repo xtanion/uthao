@@ -23,6 +23,8 @@ import { STATUS_META } from './status';
 export type Reporter = {
   id: string;
   display_name: string;
+  /** Signed profile picture link, or null to draw the initials. */
+  avatar_url?: string | null;
 };
 
 /** One image in the gallery, credited to whoever took it. */

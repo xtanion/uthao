@@ -218,7 +218,7 @@ export default function IssueDetail() {
         onPress={() => router.push(`/users/${issue.reporter.id}`)}
         style={styles.byline}
         hitSlop={6}>
-        <Avatar id={issue.reporter.id} name={issue.reporter.display_name} size={26} />
+        <Avatar id={issue.reporter.id} name={issue.reporter.display_name} uri={issue.reporter.avatar_url} size={26} />
         <Text style={[t.meta(12, '600', 0), { color: tone.ink, marginLeft: 8 }]}>
           {issue.reporter.display_name}
         </Text>
