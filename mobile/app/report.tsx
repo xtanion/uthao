@@ -10,6 +10,7 @@ import MapView from 'react-native-maps';
 import type { Region } from 'react-native-maps';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useServices } from '../src/data/context';
+import { capturedAt } from '../src/data/services';
 import { CATEGORIES, MAX_PHOTOS, SEVERITIES, categoryLabel, severityLabel } from '../src/domain/issue';
 import type { Category, Duplicate, GeoPoint, Severity } from '../src/domain/issue';
 import { DuplicateSheet } from '../src/features/issues/DuplicateSheet';
@@ -143,7 +144,14 @@ export default function Report() {
   const addToExisting = async (issueId: string) => {
     setBusy(true);
     try {
-      await issues.support(issueId, { body: caption.trim(), photos: attached });
+      // Joining someone's report makes these photos evidence for it, so they
+      // carry where the phone is now and when they were taken.
+      await issues.support(issueId, {
+        body: caption.trim(),
+        photos: attached,
+        point: await location.current(),
+        captured_at: capturedAt(attached),
+      });
       setNearby(null);
       router.replace(`/issues/${issueId}`);
     } catch (e) {

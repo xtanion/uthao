@@ -26,7 +26,7 @@ from app import db, service  # noqa: E402
 from app.enums import Category, EscalationState, Severity, Status  # noqa: E402
 from app.images import process_jpeg  # noqa: E402
 from app.models import (
-    ActivityEvent, Escalation, Issue, IssuePhoto, Support, User, new_id,
+    ActivityEvent, Escalation, Issue, IssuePhoto, Support, User, new_id, utcnow,
 )  # noqa: E402
 from app.storage import get_store  # noqa: E402
 
@@ -234,6 +234,10 @@ async def main() -> None:
                     user=supporter,
                     store=store,
                     body=rng.choice(REPLIES) if rng.random() < 0.55 else None,
+                    # Seeded supporters stand right at the report.
+                    latitude=issue.latitude,
+                    longitude=issue.longitude,
+                    captured_at=utcnow(),
                     photos=(
                         [await process_jpeg(photo(90_000 + backings, issue.category))]
                         if with_photo

@@ -8,9 +8,9 @@ from sqlalchemy.orm import joinedload, noload, selectinload
 
 from .config import get_settings
 from .cursor import FeedCursor, NearbyCursor, TimeCursor
-from .enums import CLOSED_STATUSES, HIDDEN_STATUSES, ActivityType, Category, Severity, Status
+from .enums import CLOSED_STATUSES, HIDDEN_STATUSES, UNDER_REVIEW, ActivityType, Category, Severity, Status
 from .geo import bounding_box, distance_m, squared_distance_m
-from .images import ProcessedImage
+from .images import ProcessedImage, hash_distance
 from .models import (
     ActivityEvent,
     Escalation,
@@ -58,6 +58,11 @@ class TooManyWrites(Exception):
 
 class ConflictError(Exception):
     pass
+
+
+class SupportRefused(Exception):
+    """A support that fails a check the server can make on the spot: too far
+    away, a stale photo, or a copy of a photo already on the report."""
 
 
 class SelfConfirmation(Exception):
@@ -192,6 +197,7 @@ def _to_out(issue: Issue, confirmed: bool, store: ObjectStore) -> IssueOut:
         confirmed_at=issue.confirmed_at,
         contributions_open_at=contributions_open_at(issue),
         ai_summary=issue.ai_summary,
+        review_note=issue.review_note if issue.status == Status.REJECTED else None,
         cover_url=_cover_url(issue, store),
         reporter=_person(issue.reporter, store),
         created_at=issue.created_at,
@@ -213,10 +219,19 @@ async def serialize(
     return out
 
 
-async def get_visible_issue(session: AsyncSession, issue_id: str) -> Issue | None:
+async def get_visible_issue(
+    session: AsyncSession, issue_id: str, *, viewer: User | None = None
+) -> Issue | None:
+    """The issue if this viewer may see it. Pass the viewer on reads only: a
+    reporter can open their own report while it is in review or rejected, but
+    nobody can support, confirm or vote on it until it is public."""
     issue = await session.get(Issue, issue_id)
-    if issue is None or issue.status in HIDDEN_STATUSES:
+    if issue is None:
         return None
+    if issue.status in HIDDEN_STATUSES:
+        own = viewer is not None and viewer.id == issue.reporter_id
+        if not (own and issue.status in UNDER_REVIEW):
+            return None
     return issue
 
 
@@ -508,7 +523,8 @@ async def create_issue(
         description=description,
         category=category,
         severity=severity,
-        status=Status.REPORTED,
+        # Held back until the AI check passes, when that is turned on.
+        status=Status.IN_REVIEW if get_settings().ai_review_configured else Status.REPORTED,
         latitude=latitude,
         longitude=longitude,
         locality=locality,
@@ -528,6 +544,9 @@ async def create_issue(
                 position=position,
                 original_key=original_key,
                 thumbnail_key=thumbnail_key,
+                dhash=processed.dhash or None,
+                # The report's own review decides whether anyone sees these.
+                verified_at=utcnow(),
             )
         )
         uploads.append((original_key, processed.original))
@@ -581,6 +600,13 @@ async def _recount(session: AsyncSession, issue: Issue) -> None:
     carried_a_photo = (
         select(IssuePhoto.id).where(IssuePhoto.support_id == Support.id).exists()
     )
+    # Pending photos are visible straight away, but only ones the check has
+    # passed are evidence: confirmation sends a letter to an authority.
+    carried_a_checked_photo = (
+        select(IssuePhoto.id)
+        .where(IssuePhoto.support_id == Support.id, IssuePhoto.verified_at.is_not(None))
+        .exists()
+    )
     issue.comment_count = await _count(
         session,
         select(func.count())
@@ -606,7 +632,7 @@ async def _recount(session: AsyncSession, issue: Issue) -> None:
         .where(
             Support.issue_id == issue.id,
             Support.user_id != issue.reporter_id,
-            carried_a_photo,
+            carried_a_checked_photo,
         ),
     )
 
@@ -659,7 +685,15 @@ def _support_out(
         author=_person(support.user, store),
         author_is_reporter=support.user_id == issue.reporter_id,
         mine=viewer is not None and support.user_id == viewer.id,
+        verifying=support_pending(support),
         created_at=support.created_at,
+    )
+
+
+def support_pending(support: Support) -> bool:
+    """Whether anything in this support still waits on the check."""
+    return support.verified_at is None or any(
+        photo.verified_at is None for photo in support.photos
     )
 
 
@@ -696,6 +730,8 @@ async def _attach_photos(
                 position=start_position + offset,
                 original_key=original_key,
                 thumbnail_key=thumbnail_key,
+                dhash=processed.dhash or None,
+                verified_at=None if support else utcnow(),
             )
         )
         uploads.append((original_key, processed.original))
@@ -711,14 +747,26 @@ async def add_support(
     store: ObjectStore,
     body: str | None,
     photos: list[ProcessedImage],
+    latitude: float | None = None,
+    longitude: float | None = None,
+    captured_at: datetime | None = None,
 ) -> Issue:
     """Back an issue, optionally with words and photos.
 
     Supporting twice is not an error: the second call updates the row and adds
     to it, which is what a person adding a photo to something they already
     backed expects.
+
+    Photos are evidence, so they are checked here before anything is stored:
+    taken within reach of the issue, taken just now, and not a copy of a photo
+    already on it. Words and photos then wait on the AI check (review.py);
+    until it passes they show, marked as verifying, but do not count.
     """
     is_reporter = issue.reporter_id == user.id
+    if photos and not is_reporter:
+        await _check_support_photos(
+            session, issue, photos, latitude, longitude, captured_at
+        )
     if is_reporter and not body and not photos:
         # The old rule, kept: a bare +1 on your own report corroborates
         # nothing. Adding words or a photo to it is a different act, and fine.
@@ -733,8 +781,15 @@ async def add_support(
         )
     )
     first_time = support is None
+    review_on = get_settings().ai_review_configured
     if support is None:
-        support = Support(issue_id=issue.id, user_id=user.id, body=body or None)
+        support = Support(
+            issue_id=issue.id,
+            user_id=user.id,
+            body=body or None,
+            # A bare +1 has nothing to check; words wait for the check.
+            verified_at=None if (body and review_on) else utcnow(),
+        )
         session.add(support)
         try:
             await session.flush()
@@ -749,8 +804,9 @@ async def add_support(
             if support is None:
                 raise ConflictError("That could not be saved. Try again.") from None
             first_time = False
-    if body:
+    if body and body != support.body:
         support.body = body
+        support.verified_at = None if review_on else utcnow()
 
     uploads: list[tuple[str, bytes]] = []
     if photos:
@@ -766,17 +822,21 @@ async def add_support(
         uploads = await _attach_photos(
             issue, user, support, photos, store, already
         )
+        if not review_on or is_reporter:
+            # Nothing to check against: no AI configured, or the reporter
+            # adding to their own report, which the report's gate covered.
+            for photo in issue.photos:
+                if photo.support_id == support.id and photo.verified_at is None:
+                    photo.verified_at = utcnow()
     await session.flush()
 
-    if first_time and not is_reporter:
-        session.add(
-            ActivityEvent(
-                user_id=issue.reporter_id,
-                issue_id=issue.id,
-                actor_id=user.id,
-                type=ActivityType.SUPPORT_RECEIVED,
-            )
-        )
+    # The reporter hears about a support once it has passed the check, so they
+    # are never told about one that is then taken down. Worked out from what
+    # was just written rather than support.photos, which is not loaded on a
+    # fresh row. Pending ones notify from review.review_support instead.
+    waiting = support.verified_at is None or (bool(photos) and review_on and not is_reporter)
+    if first_time and not is_reporter and not waiting:
+        notify_support_received(session, issue, user.id)
 
     try:
         for key, payload in uploads:
@@ -790,6 +850,78 @@ async def add_support(
     await session.commit()
     await session.refresh(issue)
     return issue
+
+
+def notify_support_received(session: AsyncSession, issue: Issue, supporter_id: str) -> None:
+    session.add(
+        ActivityEvent(
+            user_id=issue.reporter_id,
+            issue_id=issue.id,
+            actor_id=supporter_id,
+            type=ActivityType.SUPPORT_RECEIVED,
+        )
+    )
+
+
+async def _check_support_photos(
+    session: AsyncSession,
+    issue: Issue,
+    photos: list[ProcessedImage],
+    latitude: float | None,
+    longitude: float | None,
+    captured_at: datetime | None,
+) -> None:
+    """The checks that need no model, so a refusal is instant and says why."""
+    settings = get_settings()
+    if settings.support_location_required:
+        if latitude is None or longitude is None:
+            raise SupportRefused(
+                "Turn on location to add photos. They need to be taken where the problem is."
+            )
+        away = distance_m(issue.latitude, issue.longitude, latitude, longitude)
+        if away > settings.support_max_distance_m:
+            raise SupportRefused(
+                f"You're about {round(away)} m from this report. Photos need to be "
+                f"taken within {round(settings.support_max_distance_m)} m of it."
+            )
+        if captured_at is None:
+            raise SupportRefused("Take the photos in the app, right where the problem is.")
+        age = utcnow() - aware(captured_at)
+        if age > timedelta(minutes=settings.support_photo_max_age_minutes) or age < timedelta(minutes=-2):
+            raise SupportRefused(
+                f"Photos need to be taken in the last {settings.support_photo_max_age_minutes} "
+                "minutes, at the spot. Take a fresh one."
+            )
+
+    existing = [
+        h
+        for h in (
+            await session.scalars(
+                select(IssuePhoto.dhash).where(
+                    IssuePhoto.issue_id == issue.id, IssuePhoto.dhash.is_not(None)
+                )
+            )
+        ).all()
+        if h
+    ]
+    for processed in photos:
+        if not processed.dhash:
+            continue
+        if any(
+            hash_distance(processed.dhash, h) <= settings.duplicate_photo_max_bits
+            for h in existing
+        ):
+            raise SupportRefused(
+                "One of these photos is already on this report. Add a photo you took yourself."
+            )
+
+
+async def pending_support_id(session: AsyncSession, issue_id: str, user_id: str) -> str | None:
+    """The viewer's support on this issue if any of it still waits on the check."""
+    support = await session.scalar(
+        select(Support).where(Support.issue_id == issue_id, Support.user_id == user_id)
+    )
+    return support.id if support is not None and support_pending(support) else None
 
 
 async def remove_support(
@@ -1635,6 +1767,7 @@ async def notifications(
             actor_name=event.actor.display_name if event.actor else None,
             from_status=event.from_status,
             to_status=event.to_status,
+            note=event.note,
             issue=_summarize(event.issue, store),
             created_at=event.created_at,
         )

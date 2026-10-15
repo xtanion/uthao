@@ -242,6 +242,17 @@ export async function sanitize(uri: string): Promise<string> {
   return result.uri;
 }
 
+/** When each in-app photo was taken, by its sanitized file uri. Kept in
+ *  memory only: a support photo has to be minutes old anyway. */
+const takenAt = new Map<string, number>();
+
+/** The earliest capture time among these photos, if all were taken in-app. */
+export function capturedAt(uris: string[]): string | null {
+  const times = uris.map((uri) => takenAt.get(uri));
+  if (!times.length || times.some((t) => t === undefined)) return null;
+  return new Date(Math.min(...(times as number[]))).toISOString();
+}
+
 export class CameraPhotoSource implements PhotoSource {
   /** 'library' is a simulator affordance and is gated on __DEV__ by the
    *  caller; a shipped build always takes the camera path. */
@@ -265,7 +276,9 @@ export class CameraPhotoSource implements PhotoSource {
         : ImagePicker.launchImageLibraryAsync;
     const result = await picker({ quality: 0.9, exif: false });
     if (result.canceled) return null;
-    return sanitize(result.assets[0].uri);
+    const uri = await sanitize(result.assets[0].uri);
+    takenAt.set(uri, Date.now());
+    return uri;
   }
 
   async pickAvatar() {

@@ -28,6 +28,12 @@ def environment(tmp_path_factory) -> None:
             "OTP_DEBUG_CODE": "",
             # No network in tests.
             "GEOCODER_ENABLED": "false",
+            # Reports publish straight away unless a test turns review on.
+            "AI_REVIEW": "false",
+            # Test uploads are one fixture image, with no phone to send a
+            # location. The tests that care turn these back on.
+            "SUPPORT_LOCATION_REQUIRED": "false",
+            "DUPLICATE_PHOTO_MAX_BITS": "-1",
             "CONFIRMATIONS_TO_VERIFY": "2",
             # Out of the way by default; the tests that care set them low.
             "REPORTS_PER_USER_PER_HOUR": "1000",

@@ -41,6 +41,7 @@ async def test_creating_a_report_returns_the_contract_shape(client, sender):
         "confirmed_at",
         "contributions_open_at",
         "ai_summary",
+        "review_note",
         "photos",
         "cover_url",
         "reporter",

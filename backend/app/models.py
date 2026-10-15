@@ -106,6 +106,8 @@ class Issue(Base):
     latitude: Mapped[float] = mapped_column(Float)
     longitude: Mapped[float] = mapped_column(Float)
     locality: Mapped[str | None] = mapped_column(String(120), default=None)
+    # Why the AI check turned a report down, shown to its reporter only.
+    review_note: Mapped[str | None] = mapped_column(String(300), default=None)
 
     # confirmation_count is how many people backed this; comment_count is how
     # many of those wrote something. Both are counts of supports.
@@ -174,6 +176,14 @@ class IssuePhoto(Base):
     position: Mapped[int] = mapped_column(Integer, default=0)
     original_key: Mapped[str] = mapped_column(String(400))
     thumbnail_key: Mapped[str] = mapped_column(String(400))
+    # See images.dhash. Null on photos stored before hashing existed.
+    dhash: Mapped[str | None] = mapped_column(String(16), default=None)
+    # When the AI check passed this photo. A report's own photos are set on
+    # upload (the report has its own gate); a support's wait for its check,
+    # and only verified photos count towards confirming the report.
+    verified_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), default=None
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, index=True
     )
@@ -208,6 +218,12 @@ class Support(Base):
         String(32), ForeignKey("users.id", ondelete="CASCADE")
     )
     body: Mapped[str | None] = mapped_column(Text, default=None)
+    # When the AI check last passed this support's words. Cleared whenever the
+    # words change. Null with nothing to check (a bare +1) never happens: those
+    # are verified on the spot.
+    verified_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), default=None
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, index=True
     )
@@ -383,11 +399,12 @@ class EscalationMessage(Base):
 
 
 class ActivityEvent(Base):
-    """One line in a reporter's notifications feed.
+    """One line in someone's notifications feed.
 
-    Written when something happens to an issue they reported. The recipient is
-    always the reporter; an actor is whoever caused it, and is null for changes
-    the system made on its own.
+    Mostly written for the reporter when something happens to their issue. The
+    one exception is SUPPORT_REJECTED, which goes to the supporter whose words
+    or photos did not pass the check. An actor is whoever caused it, and is
+    null for changes the system made on its own.
     """
 
     __tablename__ = "activity_events"
@@ -409,6 +426,8 @@ class ActivityEvent(Base):
     type: Mapped[ActivityType] = mapped_column(_enum(ActivityType))
     from_status: Mapped[Status | None] = mapped_column(_enum(Status), default=None)
     to_status: Mapped[Status | None] = mapped_column(_enum(Status), default=None)
+    # Why, when the event needs explaining: the reason a support was rejected.
+    note: Mapped[str | None] = mapped_column(String(300), default=None)
     read_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), default=None
     )

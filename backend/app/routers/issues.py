@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime
 from typing import Annotated
 
 from fastapi import (
@@ -31,6 +32,7 @@ from ..schemas import (
     SupportPage,
 )
 from ..storage import get_store
+from .. import review
 
 router = APIRouter(prefix="/issues", tags=["issues"])
 
@@ -155,7 +157,7 @@ async def duplicates(
 async def read(
     issue_id: str, session: SessionDep, viewer: OptionalUser
 ) -> IssueOut:
-    issue = await service.get_visible_issue(session, issue_id)
+    issue = await service.get_visible_issue(session, issue_id, viewer=viewer)
     if issue is None:
         raise NOT_FOUND
     return await service.serialize(
@@ -243,16 +245,20 @@ async def create(
 
     # Background tasks run in order: the place is named first because the
     # headline mentions it, and the summary is written against the headline
-    # rather than the clipped caption it replaces.
+    # rather than the clipped caption it replaces. With review on, the review
+    # rewrites the title and decides whether anyone else sees it.
     if created:
         background.add_task(service.name_locality, issue.id)
-    if (
+    if created and issue.status == Status.IN_REVIEW:
+        background.add_task(review.review_report, issue.id)
+    elif (
         created
         and get_settings().ai_titles_configured
         and service.title_is_derived(issue.title, issue.description)
     ):
         background.add_task(service.refresh_title, issue.id)
-    if service.summary_is_due(issue):
+    # A report in review is summarized by the review once it is published.
+    if issue.status != Status.IN_REVIEW and service.summary_is_due(issue):
         background.add_task(service.refresh_summary, issue.id)
     return await service.serialize(session, issue, reporter, get_store())
 
@@ -265,7 +271,7 @@ async def read_supports(
     cursor: str | None = None,
     limit: Annotated[int | None, Query()] = None,
 ) -> SupportPage:
-    issue = await service.get_visible_issue(session, issue_id)
+    issue = await service.get_visible_issue(session, issue_id, viewer=viewer)
     if issue is None:
         raise NOT_FOUND
 
@@ -291,10 +297,12 @@ async def read_supports(
 
 
 @router.get("/{issue_id}/escalation", response_model=EscalationOut)
-async def read_escalation(issue_id: str, session: SessionDep) -> EscalationOut:
+async def read_escalation(
+    issue_id: str, session: SessionDep, viewer: OptionalUser
+) -> EscalationOut:
     """The letter raised with the authority, readable by the people it was sent
     for. Never carries the recipient address or the reply token."""
-    issue = await service.get_visible_issue(session, issue_id)
+    issue = await service.get_visible_issue(session, issue_id, viewer=viewer)
     if issue is None:
         raise NOT_FOUND
     record = await service.escalation_for(session, issue)
@@ -314,8 +322,10 @@ async def read_escalation(issue_id: str, session: SessionDep) -> EscalationOut:
 
 
 @router.get("/{issue_id}/photos", response_model=list[PhotoOut])
-async def read_photos(issue_id: str, session: SessionDep) -> list[PhotoOut]:
-    issue = await service.get_visible_issue(session, issue_id)
+async def read_photos(
+    issue_id: str, session: SessionDep, viewer: OptionalUser
+) -> list[PhotoOut]:
+    issue = await service.get_visible_issue(session, issue_id, viewer=viewer)
     if issue is None:
         raise NOT_FOUND
     return await service.gallery(session, issue, get_store())
@@ -329,6 +339,11 @@ async def write_support(
     background: BackgroundTasks,
     body: Annotated[str | None, Form(max_length=2000)] = None,
     photos: Annotated[list[UploadFile] | None, File()] = None,
+    # Where the phone was and when the photos were taken. Required with
+    # photos: a support photo is evidence only if it was taken at the spot.
+    latitude: Annotated[float | None, Form(ge=-90, le=90)] = None,
+    longitude: Annotated[float | None, Form(ge=-180, le=180)] = None,
+    captured_at: Annotated[datetime | None, Form()] = None,
 ) -> IssueOut:
     """Back a report, optionally with words and photos.
 
@@ -355,13 +370,21 @@ async def write_support(
             store=get_store(),
             body=text,
             photos=processed,
+            latitude=latitude,
+            longitude=longitude,
+            captured_at=captured_at,
         )
     except service.SelfConfirmation as exc:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)
         ) from exc
-    except service.ConflictError as exc:
+    except (service.ConflictError, service.SupportRefused) as exc:
         raise _unprocessable(str(exc)) from exc
+
+    if get_settings().ai_review_configured:
+        pending = await service.pending_support_id(session, issue.id, user.id)
+        if pending:
+            background.add_task(review.review_support, pending)
 
     # Only words change what a summary would say; a bare +1 does not.
     if text and service.summary_is_due(issue):
@@ -389,10 +412,12 @@ async def read_fix_dates(
     issue_id: str, session: SessionDep, viewer: OptionalUser
 ) -> FixDatesOut:
     """Readable before the window opens, so people can see what is coming."""
-    issue = await service.get_visible_issue(session, issue_id)
+    issue = await service.get_visible_issue(session, issue_id, viewer=viewer)
     if issue is None:
         raise NOT_FOUND
-    return await service.fix_dates(session, issue=issue, viewer=viewer)
+    return await service.fix_dates(
+        session, issue=issue, viewer=viewer, store=get_store()
+    )
 
 
 @router.post("/{issue_id}/fix-dates", response_model=FixDatesOut)
