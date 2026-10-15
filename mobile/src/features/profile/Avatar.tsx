@@ -1,5 +1,6 @@
 import React from 'react';
-import { Image, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import { RemoteImage } from '../shell/RemoteImage';
 import Svg, { Line } from 'react-native-svg';
 import { initials } from '../../domain/profile';
 
@@ -37,7 +38,7 @@ export function Avatar({
 
   if (uri) {
     return (
-      <Image
+      <RemoteImage
         source={{ uri }}
         style={{ width: size, height: size, borderRadius: radius }}
         resizeMode="cover"

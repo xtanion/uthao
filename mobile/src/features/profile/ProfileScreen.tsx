@@ -56,14 +56,14 @@ export function ProfileScreen({ userId }: { userId: string }) {
     [auth, confirm, router],
   );
 
-  if (profile.isPending) {
+  if (!profile.data && profile.isPending) {
     return (
       <Centered>
         <ActivityIndicator color={tone.accentDeep} />
       </Centered>
     );
   }
-  if (profile.isError) return <Notice text={(profile.error as Error).message} />;
+  if (profile.isError && !profile.data) return <Notice text={(profile.error as Error).message} />;
 
   const grid = tab !== 2;
 

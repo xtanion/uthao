@@ -1,6 +1,7 @@
 import { Eye, MapPin, Plus } from 'lucide-react-native';
 import React from 'react';
-import { Image, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { RemoteImage } from '../shell/RemoteImage';
 import type { Duplicate } from '../../domain/issue';
 import { categoryLabel, roundedDistance, shortAge, titleCase } from '../../domain/issue';
 import { metric, type as t, useTone } from '../../theme/tokens';
@@ -69,7 +70,7 @@ export function DuplicateSheet({
               ]}>
               <View style={styles.thumb}>
                 {issue.cover_url && !issue.cover_url.startsWith('demo://') ? (
-                  <Image source={{ uri: issue.cover_url }} style={styles.thumbImage} />
+                  <RemoteImage source={{ uri: issue.cover_url }} style={styles.thumbImage} />
                 ) : (
                   <CategoryPlate
                     category={issue.category}
