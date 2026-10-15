@@ -59,6 +59,9 @@ class IssueOut(BaseModel):
     # issues at once and needs one signed link each, not all of them.
     photos: list["PhotoOut"] | None = None
     ai_summary: str | None = None
+    # Why the AI check rejected it. Only set on a rejected report, which only
+    # its reporter can read.
+    review_note: str | None = None
     reporter: ReporterOut
     created_at: datetime
 

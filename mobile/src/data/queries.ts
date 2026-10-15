@@ -45,7 +45,12 @@ export function useMapIssues(point: GeoPoint) {
 
 export function useIssue(id: string) {
   const { issues } = useServices();
-  return useQuery({ queryKey: ['issue', id], queryFn: () => issues.get(id) });
+  return useQuery({
+    queryKey: ['issue', id],
+    queryFn: () => issues.get(id),
+    // While the AI check runs, poll so the reporter sees it go live.
+    refetchInterval: (query) => (query.state.data?.status === 'in_review' ? 4000 : false),
+  });
 }
 
 export function useLocation() {

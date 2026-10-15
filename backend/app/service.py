@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from .config import get_settings
 from .cursor import FeedCursor, NearbyCursor, TimeCursor
-from .enums import CLOSED_STATUSES, HIDDEN_STATUSES, ActivityType, Category, Severity, Status
+from .enums import CLOSED_STATUSES, HIDDEN_STATUSES, UNDER_REVIEW, ActivityType, Category, Severity, Status
 from .geo import bounding_box, distance_m, squared_distance_m
 from .images import ProcessedImage
 from .models import (
@@ -183,6 +183,7 @@ def _to_out(issue: Issue, confirmed: bool, store: ObjectStore) -> IssueOut:
         confirmed_at=issue.confirmed_at,
         contributions_open_at=contributions_open_at(issue),
         ai_summary=issue.ai_summary,
+        review_note=issue.review_note if issue.status == Status.REJECTED else None,
         cover_url=_cover_url(issue, store),
         reporter=_person(issue.reporter, store),
         created_at=issue.created_at,
@@ -204,10 +205,19 @@ async def serialize(
     return out
 
 
-async def get_visible_issue(session: AsyncSession, issue_id: str) -> Issue | None:
+async def get_visible_issue(
+    session: AsyncSession, issue_id: str, *, viewer: User | None = None
+) -> Issue | None:
+    """The issue if this viewer may see it. Pass the viewer on reads only: a
+    reporter can open their own report while it is in review or rejected, but
+    nobody can support, confirm or vote on it until it is public."""
     issue = await session.get(Issue, issue_id)
-    if issue is None or issue.status in HIDDEN_STATUSES:
+    if issue is None:
         return None
+    if issue.status in HIDDEN_STATUSES:
+        own = viewer is not None and viewer.id == issue.reporter_id
+        if not (own and issue.status in UNDER_REVIEW):
+            return None
     return issue
 
 
@@ -469,10 +479,11 @@ async def create_issue(
         description=description,
         category=category,
         severity=severity,
-        status=Status.REPORTED,
+        # Held back until the AI check passes, when that is turned on.
+        status=Status.IN_REVIEW if get_settings().ai_review_configured else Status.REPORTED,
         latitude=latitude,
         longitude=longitude,
-        locality=None,
+        locality=locality,
         confirmation_count=0,
         comment_count=0,
         photo_count=len(photos),

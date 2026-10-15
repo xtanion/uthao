@@ -142,6 +142,21 @@ class Settings(BaseSettings):
     ai_routing: bool = True
     # Rewrites the clipped caption the app sends as a title into a headline.
     ai_titles: bool = True
+    # Every new report waits in review until its photos are checked and its
+    # title rewritten; only then do others see it. Off, or no key, and reports
+    # go straight to the feed as before.
+    ai_review: bool = True
+    # The photo check is a yes/no call made on every report, so it should be a
+    # small, fast vision model. Blank falls back to ai_model.
+    ai_review_model: str = ""
+    # OpenAI's moderation endpoint runs first, on the caption and photos. It
+    # is free, catches nudity, gore and abuse, and a flagged report never
+    # reaches the paid photo check.
+    ai_moderation: bool = True
+    moderation_model: str = "omni-moderation-latest"
+    # A report stuck in review this long (a failed call, a restart) is picked
+    # up again by `python -m app.jobs review`.
+    review_retry_after_minutes: int = 5
     # A summary is rewritten at most this often, however many people reply.
     ai_summary_min_interval_seconds: int = 300
 
@@ -206,6 +221,10 @@ class Settings(BaseSettings):
     @property
     def ai_summary_configured(self) -> bool:
         return bool(self.openai_api_key)
+
+    @property
+    def ai_review_configured(self) -> bool:
+        return bool(self.openai_api_key and self.ai_review)
 
     @property
     def ai_titles_configured(self) -> bool:

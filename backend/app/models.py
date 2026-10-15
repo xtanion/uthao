@@ -106,6 +106,8 @@ class Issue(Base):
     latitude: Mapped[float] = mapped_column(Float)
     longitude: Mapped[float] = mapped_column(Float)
     locality: Mapped[str | None] = mapped_column(String(120), default=None)
+    # Why the AI check turned a report down, shown to its reporter only.
+    review_note: Mapped[str | None] = mapped_column(String(300), default=None)
 
     # confirmation_count is how many people backed this; comment_count is how
     # many of those wrote something. Both are counts of supports.

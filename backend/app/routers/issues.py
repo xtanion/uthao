@@ -31,7 +31,7 @@ from ..schemas import (
     SupportPage,
 )
 from ..storage import get_store
-from .. import geocode
+from .. import geocode, review
 
 router = APIRouter(prefix="/issues", tags=["issues"])
 
@@ -156,7 +156,7 @@ async def duplicates(
 async def read(
     issue_id: str, session: SessionDep, viewer: OptionalUser
 ) -> IssueOut:
-    issue = await service.get_visible_issue(session, issue_id)
+    issue = await service.get_visible_issue(session, issue_id, viewer=viewer)
     if issue is None:
         raise NOT_FOUND
     return await service.serialize(
@@ -244,8 +244,11 @@ async def create(
         raise _unprocessable(str(exc)) from exc
 
     # Background tasks run in order, so the summary is written against the
-    # headline rather than the clipped caption it replaces.
-    if (
+    # headline rather than the clipped caption it replaces. With review on, the
+    # review rewrites the title and decides whether anyone else sees it.
+    if created and issue.status == Status.IN_REVIEW:
+        background.add_task(review.review_report, issue.id)
+    elif (
         created
         and get_settings().ai_titles_configured
         and service.title_is_derived(issue.title, issue.description)
@@ -264,7 +267,7 @@ async def read_supports(
     cursor: str | None = None,
     limit: Annotated[int | None, Query()] = None,
 ) -> SupportPage:
-    issue = await service.get_visible_issue(session, issue_id)
+    issue = await service.get_visible_issue(session, issue_id, viewer=viewer)
     if issue is None:
         raise NOT_FOUND
 
@@ -290,10 +293,12 @@ async def read_supports(
 
 
 @router.get("/{issue_id}/escalation", response_model=EscalationOut)
-async def read_escalation(issue_id: str, session: SessionDep) -> EscalationOut:
+async def read_escalation(
+    issue_id: str, session: SessionDep, viewer: OptionalUser
+) -> EscalationOut:
     """The letter raised with the authority, readable by the people it was sent
     for. Never carries the recipient address or the reply token."""
-    issue = await service.get_visible_issue(session, issue_id)
+    issue = await service.get_visible_issue(session, issue_id, viewer=viewer)
     if issue is None:
         raise NOT_FOUND
     record = await service.escalation_for(session, issue)
@@ -313,8 +318,10 @@ async def read_escalation(issue_id: str, session: SessionDep) -> EscalationOut:
 
 
 @router.get("/{issue_id}/photos", response_model=list[PhotoOut])
-async def read_photos(issue_id: str, session: SessionDep) -> list[PhotoOut]:
-    issue = await service.get_visible_issue(session, issue_id)
+async def read_photos(
+    issue_id: str, session: SessionDep, viewer: OptionalUser
+) -> list[PhotoOut]:
+    issue = await service.get_visible_issue(session, issue_id, viewer=viewer)
     if issue is None:
         raise NOT_FOUND
     return await service.gallery(session, issue, get_store())
@@ -388,10 +395,12 @@ async def read_fix_dates(
     issue_id: str, session: SessionDep, viewer: OptionalUser
 ) -> FixDatesOut:
     """Readable before the window opens, so people can see what is coming."""
-    issue = await service.get_visible_issue(session, issue_id)
+    issue = await service.get_visible_issue(session, issue_id, viewer=viewer)
     if issue is None:
         raise NOT_FOUND
-    return await service.fix_dates(session, issue=issue, viewer=viewer)
+    return await service.fix_dates(
+        session, issue=issue, viewer=viewer, store=get_store()
+    )
 
 
 @router.post("/{issue_id}/fix-dates", response_model=FixDatesOut)
