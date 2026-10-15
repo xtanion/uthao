@@ -133,6 +133,8 @@ export type NewIssue = {
   severity: Severity;
   latitude: number;
   longitude: number;
+  /** "Worli, Mumbai". Null when the phone could not name the place. */
+  locality?: string | null;
   photos: string[];
 };
 

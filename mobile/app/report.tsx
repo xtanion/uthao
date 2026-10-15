@@ -133,6 +133,7 @@ export default function Report() {
       severity,
       latitude: at.latitude,
       longitude: at.longitude,
+      locality: await location.locality(at),
       photos: attached,
     });
     setNearby(null);
@@ -166,7 +167,8 @@ export default function Report() {
 
   // A report is a photo plus a sentence, so the button says so by staying grey
   // rather than accepting the tap and refusing afterwards.
-  const ready = attached.length > 0 && caption.trim().length >= 3;
+  // No pin, no post: a report is its place.
+  const ready = attached.length > 0 && caption.trim().length >= 3 && !!point;
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: tone.bg }}>
