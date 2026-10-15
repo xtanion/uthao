@@ -149,9 +149,11 @@ def _move(issue: Issue, to: Status) -> ActivityEvent:
 async def review_report(issue_id: str) -> None:
     """Check one report and publish or reject it. Safe to run twice: it only
     acts on a report that is still IN_REVIEW."""
+    from . import service
     from .db import sessionmaker
 
     store = get_store()
+    summary_due = False
     try:
         async with sessionmaker()() as session:
             issue = await session.get(Issue, issue_id)
@@ -188,8 +190,15 @@ async def review_report(issue_id: str) -> None:
             issue.review_note = None
             session.add(_move(issue, Status.REPORTED))
             await session.commit()
+            summary_due = service.summary_is_due(issue)
     except Exception:
         log.exception("could not review issue %s; it stays in review", issue_id)
+        return
+
+    # Filing leaves the summary to this step, so a report published by the
+    # retry job gets one too, written against the headline just set.
+    if summary_due:
+        await service.refresh_summary(issue_id)
 
 
 async def retry_stuck(limit: int | None = None) -> int:

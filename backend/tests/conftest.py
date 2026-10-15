@@ -28,6 +28,8 @@ def environment(tmp_path_factory) -> None:
             "OTP_DEBUG_CODE": "",
             # No network in tests.
             "GEOCODER_ENABLED": "false",
+            # Reports publish straight away unless a test turns review on.
+            "AI_REVIEW": "false",
             # Test uploads are one fixture image, with no phone to send a
             # location. The tests that care turn these back on.
             "SUPPORT_LOCATION_REQUIRED": "false",

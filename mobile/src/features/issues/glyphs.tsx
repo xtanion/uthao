@@ -1,7 +1,7 @@
 import React from 'react';
 import {
   Ban, BadgeCheck, CheckCheck, CircleAlert, CircleDot, ClipboardCheck, Copy,
-  Droplets, Flag, Footprints, LampCeiling, Landmark, MailCheck,
+  CircleX, Droplets, Flag, Footprints, Hourglass, LampCeiling, Landmark, MailCheck,
   RotateCcw, Send, TrafficCone, Trash2, TreeDeciduous, TriangleAlert, Wrench,
 } from 'lucide-react-native';
 import type { Category, Status } from '../../domain/issue';
@@ -25,6 +25,7 @@ const CATEGORY_ICON = {
  * a second check (CheckCheck).
  */
 const STATUS_ICON = {
+  in_review: Hourglass,
   reported: Flag,
   community_verified: BadgeCheck,
   submitted_to_authority: Send,
@@ -35,7 +36,8 @@ const STATUS_ICON = {
   reopened: RotateCcw,
   duplicate: Copy,
   removed: Ban,
-} as const;
+  rejected: CircleX,
+} as const satisfies Record<Status, unknown>;
 
 export const CategoryGlyph = ({ category, ...rest }: { category: Category; size: number; color: string }) => {
   const Icon = CATEGORY_ICON[category];

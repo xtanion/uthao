@@ -257,7 +257,8 @@ async def create(
         and service.title_is_derived(issue.title, issue.description)
     ):
         background.add_task(service.refresh_title, issue.id)
-    if service.summary_is_due(issue):
+    # A report in review is summarized by the review once it is published.
+    if issue.status != Status.IN_REVIEW and service.summary_is_due(issue):
         background.add_task(service.refresh_summary, issue.id)
     return await service.serialize(session, issue, reporter, get_store())
 
