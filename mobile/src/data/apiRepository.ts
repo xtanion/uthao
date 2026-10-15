@@ -125,6 +125,11 @@ export class ApiIssuesRepository implements IssuesRepository {
     // Always sent, even empty: it is what makes the request a form.
     form.append('body', draft.body ?? '');
     appendPhotos(form, draft.photos);
+    if (draft.point) {
+      form.append('latitude', String(draft.point.latitude));
+      form.append('longitude', String(draft.point.longitude));
+    }
+    if (draft.captured_at) form.append('captured_at', draft.captured_at);
     return request<Issue>(`/issues/${id}/supports`, { method: 'POST', body: form });
   }
 

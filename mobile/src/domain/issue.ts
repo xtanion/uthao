@@ -86,6 +86,8 @@ export type Support = {
   author: Reporter;
   author_is_reporter: boolean;
   mine: boolean;
+  /** Still waiting on the AI check. Shown, but its photos don't count yet. */
+  verifying?: boolean;
   created_at: string;
 };
 
@@ -121,6 +123,10 @@ export type SupportPage = {
 export type SupportDraft = {
   body?: string;
   photos: string[];
+  /** Where the phone was. Sent with photos: they must be taken at the spot. */
+  point?: GeoPoint;
+  /** ISO time the earliest photo was taken in the app. */
+  captured_at?: string | null;
 };
 
 export const roundedDistance = (metres: number): string =>

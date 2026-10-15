@@ -129,6 +129,9 @@ class SupportOut(BaseModel):
     # with the person who filed it rather than a row of anonymous voices.
     author_is_reporter: bool
     mine: bool
+    # Its words or photos are still waiting on the AI check. Shown to everyone,
+    # but its photos do not count towards confirming the report yet.
+    verifying: bool = False
     created_at: datetime
 
     @field_serializer("created_at")
@@ -263,6 +266,8 @@ class NotificationOut(BaseModel):
     actor_name: str | None
     from_status: Status | None
     to_status: Status | None
+    # Why: set on support_rejected, the reason the support was taken down.
+    note: str | None = None
     issue: IssueSummary
     created_at: datetime
 

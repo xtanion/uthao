@@ -20,6 +20,9 @@ class ProcessedImage:
     thumbnail: bytes
     width: int
     height: int
+    # 64-bit difference hash, hex. Near-identical photos (a screenshot of
+    # another photo, a re-upload) land within a few bits of each other.
+    dhash: str = ""
 
 
 def _encode(image: Image.Image, max_width: int, quality: int) -> tuple[bytes, Image.Image]:
@@ -61,7 +64,28 @@ def _process(data: bytes) -> ProcessedImage:
         thumbnail=thumbnail,
         width=stored.width,
         height=stored.height,
+        dhash=dhash(stripped),
     )
+
+
+def dhash(image: Image.Image) -> str:
+    """Difference hash: shrink to 9x8 grey and record whether each pixel is
+    brighter than its right neighbour. Survives recompression, resizing and
+    small crops, which is exactly what a screenshot of a photo does to it."""
+    small = image.convert("L").resize((9, 8), Image.Resampling.LANCZOS)
+    pixels = list(small.getdata())
+    bits = 0
+    for row in range(8):
+        for col in range(8):
+            left = pixels[row * 9 + col]
+            right = pixels[row * 9 + col + 1]
+            bits = (bits << 1) | (left > right)
+    return f"{bits:016x}"
+
+
+def hash_distance(a: str, b: str) -> int:
+    """How many of the 64 bits differ. 0 is the same picture."""
+    return bin(int(a, 16) ^ int(b, 16)).count("1")
 
 
 async def process_jpeg(data: bytes) -> ProcessedImage:

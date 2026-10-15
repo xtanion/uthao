@@ -5,6 +5,7 @@ export const ACTIVITY_TYPES = [
   'support_received',
   'authority_replied',
   'status_changed',
+  'support_rejected',
 ] as const;
 export type ActivityType = (typeof ACTIVITY_TYPES)[number];
 
@@ -26,6 +27,8 @@ export type Notification = {
   actor_name: string | null;
   from_status: Status | null;
   to_status: Status | null;
+  /** Why: on support_rejected, the reason the support was taken down. */
+  note?: string | null;
   issue: IssueSummary;
   created_at: string;
 };
@@ -45,6 +48,9 @@ export const notificationLine = (item: Notification): string => {
   if (item.type === 'support_received') {
     const who = item.actor_name ?? 'Someone';
     return `${who} independently saw this`;
+  }
+  if (item.type === 'support_rejected') {
+    return `Your support wasn't added. ${item.note ?? ''}`.trim();
   }
   if (item.type === 'authority_replied') {
     return 'The authority replied to your report';
