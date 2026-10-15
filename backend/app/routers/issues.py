@@ -31,6 +31,7 @@ from ..schemas import (
     SupportPage,
 )
 from ..storage import get_store
+from .. import geocode
 
 router = APIRouter(prefix="/issues", tags=["issues"])
 
@@ -207,6 +208,9 @@ async def create(
     longitude: Annotated[float, Form(ge=-180, le=180)],
     photos: Annotated[list[UploadFile], File()],
     description: Annotated[str, Form(max_length=2000)] = "",
+    # "Worli, Mumbai" as the phone named it. Only a fallback: the server names
+    # the coordinates itself below.
+    locality: Annotated[str | None, Form(max_length=120)] = None,
 ) -> IssueOut:
     report_id = _normalized_report_id(client_report_id)
     if not title.strip():
@@ -220,6 +224,7 @@ async def create(
         raise HTTPException(status_code=429, detail=str(exc)) from exc
 
     processed = await _processed_photos(photos)
+    place = await geocode.locality(latitude, longitude) or (locality or "").strip() or None
     try:
         issue, created = await service.create_issue(
             session,
@@ -232,6 +237,7 @@ async def create(
             severity=severity,
             latitude=latitude,
             longitude=longitude,
+            locality=place,
             photos=processed,
         )
     except service.ConflictError as exc:

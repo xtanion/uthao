@@ -26,6 +26,8 @@ def environment(tmp_path_factory) -> None:
             "R2_ACCESS_KEY_ID": "",
             "R2_SECRET_ACCESS_KEY": "",
             "OTP_DEBUG_CODE": "",
+            # No network in tests.
+            "GEOCODER_ENABLED": "false",
             "CONFIRMATIONS_TO_VERIFY": "2",
             # Out of the way by default; the tests that care set them low.
             "REPORTS_PER_USER_PER_HOUR": "1000",

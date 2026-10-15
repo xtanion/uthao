@@ -449,6 +449,7 @@ async def create_issue(
     latitude: float,
     longitude: float,
     photos: list[ProcessedImage],
+    locality: str | None = None,
 ) -> tuple[Issue, bool]:
     """Returns the issue and whether it was created by this call."""
     existing = await session.scalar(

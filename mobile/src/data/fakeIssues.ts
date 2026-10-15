@@ -571,6 +571,10 @@ export class FixedLocationService implements LocationService {
   async describe() {
     return 'Bandra West, Mumbai';
   }
+
+  async locality() {
+    return 'Bandra West, Mumbai';
+  }
 }
 
 /** Simulators have no camera, so demo runs hand back a placeholder path. */

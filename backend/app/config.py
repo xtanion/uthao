@@ -45,6 +45,13 @@ class Settings(BaseSettings):
     geofence_min_longitude: float = 68.0
     geofence_max_longitude: float = 97.5
 
+    # Names each report's coordinates ("Worli, Mumbai") when it is filed.
+    # Nominatim's policy wants a User-Agent that identifies the app.
+    geocoder_enabled: bool = True
+    geocoder_url: str = "https://nominatim.openstreetmap.org/reverse"
+    geocoder_user_agent: str = "uthao/1.0 (https://github.com/xtanion/uthao)"
+    geocoder_timeout_seconds: float = 4.0
+
     default_radius_m: float = 500.0
     # The home feed widens through these until it has a full page, so a person
     # standing somewhere quiet still opens the app to something.
