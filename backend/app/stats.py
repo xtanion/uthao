@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from enum import StrEnum
 
-from sqlalchemy import and_, case, func, select, true, union
+from sqlalchemy import and_, case, func, literal, select, true, union, union_all
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .authority import authority_row_for
@@ -72,7 +72,7 @@ class UnknownArea(Exception):
     pass
 
 
-def _in_box(row: Authority):
+def _in_box(row: Authority | type[Authority]):
     return and_(
         Issue.latitude.between(row.min_latitude, row.max_latitude),
         Issue.longitude.between(row.min_longitude, row.max_longitude),
@@ -81,17 +81,14 @@ def _in_box(row: Authority):
 
 async def areas(session: AsyncSession) -> list[tuple[Authority, int]]:
     """Cities with at least one counted report, busiest first."""
-    rows = (
-        await session.scalars(select(Authority).where(Authority.active.is_(True)))
-    ).all()
-    counted = Issue.status.not_in(list(UNCOUNTED))
-    tallies = []
-    for row in rows:
-        reports = await session.scalar(
-            select(func.count()).select_from(Issue).where(counted, _in_box(row))
-        )
-        if reports:
-            tallies.append((row, int(reports)))
+    reports = func.count(Issue.id)
+    rows = await session.execute(
+        select(Authority, reports)
+        .join(Issue, and_(Issue.status.not_in(list(UNCOUNTED)), _in_box(Authority)))
+        .where(Authority.active.is_(True))
+        .group_by(Authority.id)
+    )
+    tallies = [(row, int(count)) for row, count in rows.all()]
     return sorted(tallies, key=lambda pair: (-pair[1], pair[0].city))
 
 
@@ -122,17 +119,29 @@ def _counted(area: Area):
     return and_(Issue.status.not_in(list(UNCOUNTED)), area.contains())
 
 
-async def _totals(session: AsyncSession, area: Area) -> StatsTotals:
-    rows = await session.execute(
-        select(Issue.status, func.count()).where(_counted(area)).group_by(Issue.status)
-    )
-    by_status = {status: count for status, count in rows.all()}
+def _tally(statuses):
+    return func.coalesce(func.sum(case((Issue.status.in_(list(statuses)), 1), else_=0)), 0)
 
-    photos = await session.scalar(
+
+async def _totals(session: AsyncSession, area: Area) -> StatsTotals:
+    # One round trip: every figure is a scalar subquery of the same select.
+    stages = (
+        select(
+            func.count(),
+            _tally(CONFIRMED),
+            _tally(RAISED),
+            _tally({Status.RESOLVED}),
+        )
+        .select_from(Issue)
+        .where(_counted(area))
+        .subquery()
+    )
+    photos = (
         select(func.count())
         .select_from(IssuePhoto)
         .join(Issue, IssuePhoto.issue_id == Issue.id)
         .where(_counted(area))
+        .scalar_subquery()
     )
     people = union(
         select(Issue.reporter_id.label("user_id")).where(_counted(area)),
@@ -140,20 +149,24 @@ async def _totals(session: AsyncSession, area: Area) -> StatsTotals:
         .join(Issue, Support.issue_id == Issue.id)
         .where(_counted(area)),
     ).subquery()
-    contributors = await session.scalar(select(func.count()).select_from(people))
-    emails = await session.scalar(
+    contributors = select(func.count()).select_from(people).scalar_subquery()
+    emails = (
         select(func.count())
         .select_from(EscalationMessage)
         .join(Escalation, EscalationMessage.escalation_id == Escalation.id)
         .join(Issue, Escalation.issue_id == Issue.id)
         .where(EscalationMessage.direction == MessageDirection.OUTBOUND, _counted(area))
+        .scalar_subquery()
     )
+    reported, confirmed, raised, resolved, photos, contributors, emails = (
+        await session.execute(select(*stages.c, photos, contributors, emails))
+    ).one()
 
     return StatsTotals(
-        reported=sum(by_status.values()),
-        confirmed=sum(n for s, n in by_status.items() if s in CONFIRMED),
-        raised=sum(n for s, n in by_status.items() if s in RAISED),
-        resolved=by_status.get(Status.RESOLVED, 0),
+        reported=int(reported or 0),
+        confirmed=int(confirmed or 0),
+        raised=int(raised or 0),
+        resolved=int(resolved or 0),
         photos=int(photos or 0),
         contributors=int(contributors or 0),
         emails_sent=int(emails or 0),
@@ -206,22 +219,18 @@ async def _weeks(session: AsyncSession, area: Area) -> list[StatsWeek]:
 
     reported = [0] * WEEKS
     resolved = [0] * WEEKS
-    filed = await session.scalars(
-        select(Issue.created_at).where(_counted(area), Issue.created_at >= since)
+    filed = select(literal(False).label("fixed"), Issue.created_at.label("at")).where(
+        _counted(area), Issue.created_at >= since
     )
-    for moment in filed:
-        index = bucket(aware(moment))
-        if 0 <= index < WEEKS:
-            reported[index] += 1
-    fixed = await session.scalars(
-        select(fixed_at)
+    fixed = (
+        select(literal(True).label("fixed"), fixed_at.label("at"))
         .outerjoin(events, events.c.issue_id == Issue.id)
         .where(Issue.status == Status.RESOLVED, area.contains(), fixed_at >= since)
     )
-    for moment in fixed:
+    for was_fixed, moment in (await session.execute(union_all(filed, fixed))).all():
         index = bucket(aware(moment))
         if 0 <= index < WEEKS:
-            resolved[index] += 1
+            (resolved if was_fixed else reported)[index] += 1
 
     return [
         StatsWeek(
@@ -249,21 +258,34 @@ async def _categories(session: AsyncSession, area: Area) -> list[StatsCategory]:
 
 async def _points(session: AsyncSession, area: Area) -> list[StatsPoint]:
     # Capped per kind so a busy city cannot crowd the fixed ones off the map.
-    points: list[StatsPoint] = []
-    for resolved in (True, False):
+    def kind(resolved: bool):
         condition = (
             Issue.status == Status.RESOLVED if resolved else Issue.status != Status.RESOLVED
         )
-        rows = await session.execute(
-            select(Issue.latitude, Issue.longitude)
+        newest = (
+            select(Issue.latitude, Issue.longitude, Issue.created_at)
             .where(_counted(area), condition)
             .order_by(Issue.created_at.desc())
             .limit(POINTS_PER_KIND)
+            .subquery()
         )
-        points.extend(
-            StatsPoint(latitude=lat, longitude=lng, resolved=resolved) for lat, lng in rows.all()
+        return select(
+            literal(resolved).label("resolved"),
+            newest.c.latitude,
+            newest.c.longitude,
+            newest.c.created_at,
         )
-    return points
+
+    both = union_all(kind(True), kind(False)).subquery()
+    rows = await session.execute(
+        select(both.c.resolved, both.c.latitude, both.c.longitude).order_by(
+            both.c.resolved.desc(), both.c.created_at.desc()
+        )
+    )
+    return [
+        StatsPoint(latitude=lat, longitude=lng, resolved=bool(resolved))
+        for resolved, lat, lng in rows.all()
+    ]
 
 
 async def top_contributors(
@@ -275,29 +297,29 @@ async def top_contributors(
     visible = and_(Issue.status.not_in(list(HIDDEN_STATUSES)), area.contains())
     events, fixed_at = _fixed_at()
 
-    posts = dict(
-        (await session.execute(
-            select(Issue.reporter_id, func.count())
-            .where(visible, Issue.created_at >= since)
-            .group_by(Issue.reporter_id)
-        )).all()
+    posted = (
+        select(literal("posts").label("kind"), Issue.reporter_id, func.count())
+        .where(visible, Issue.created_at >= since)
+        .group_by(Issue.reporter_id)
     )
-    resolutions = dict(
-        (await session.execute(
-            select(Issue.reporter_id, func.count())
-            .outerjoin(events, events.c.issue_id == Issue.id)
-            .where(Issue.status == Status.RESOLVED, area.contains(), fixed_at >= since)
-            .group_by(Issue.reporter_id)
-        )).all()
+    fixed = (
+        select(literal("resolutions").label("kind"), Issue.reporter_id, func.count())
+        .outerjoin(events, events.c.issue_id == Issue.id)
+        .where(Issue.status == Status.RESOLVED, area.contains(), fixed_at >= since)
+        .group_by(Issue.reporter_id)
     )
-    upvotes = dict(
-        (await session.execute(
-            select(Issue.reporter_id, func.count(Support.id))
-            .join(Support, Support.issue_id == Issue.id)
-            .where(visible, Support.user_id != Issue.reporter_id, Support.created_at >= since)
-            .group_by(Issue.reporter_id)
-        )).all()
+    backed = (
+        select(literal("upvotes").label("kind"), Issue.reporter_id, func.count(Support.id))
+        .join(Support, Support.issue_id == Issue.id)
+        .where(visible, Support.user_id != Issue.reporter_id, Support.created_at >= since)
+        .group_by(Issue.reporter_id)
     )
+    counts: dict[str, dict[str, int]] = {"posts": {}, "resolutions": {}, "upvotes": {}}
+    for kind, user_id, count in (
+        await session.execute(union_all(posted, fixed, backed))
+    ).all():
+        counts[kind][user_id] = count
+    posts, resolutions, upvotes = counts["posts"], counts["resolutions"], counts["upvotes"]
 
     scored = []
     for user_id in posts.keys() | resolutions.keys() | upvotes.keys():

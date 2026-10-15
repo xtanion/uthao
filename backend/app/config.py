@@ -63,6 +63,12 @@ class Settings(BaseSettings):
     # probably the same thing; the report screen offers to join it instead.
     duplicate_radius_m: float = 100.0
     max_radius_m: float = 50_000.0
+    # Public, viewer-independent reads (stats pages) are served from memory
+    # for this long. Bounded by entries and by approximate serialized bytes so
+    # a spread of distinct keys cannot grow the process. 0 turns it off.
+    public_cache_ttl_seconds: float = 60.0
+    public_cache_max_entries: int = 256
+    public_cache_max_bytes: int = 8 * 1024 * 1024
     default_limit: int = 20
     max_limit: int = 100
 

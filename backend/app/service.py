@@ -1,9 +1,10 @@
 import logging
 from datetime import date, datetime, time, timedelta, timezone
 
-from sqlalchemy import and_, case, delete, func, or_, select, update
+from sqlalchemy import and_, case, delete, func, literal, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import joinedload, noload, selectinload
 
 from .config import get_settings
 from .cursor import FeedCursor, NearbyCursor, TimeCursor
@@ -144,6 +145,14 @@ def contributions_are_open(issue: Issue) -> bool:
     return utcnow() >= opens
 
 
+# What a list row needs and no more: the reporter's name rides on the main
+# query, and a photo's contributor (a user per photo) is only for the gallery.
+LISTED = (
+    joinedload(Issue.reporter),
+    selectinload(Issue.photos).options(noload(IssuePhoto.contributor)),
+)
+
+
 def _cover_url(issue: Issue, store: ObjectStore) -> str | None:
     if not issue.photos:
         return None
@@ -251,7 +260,11 @@ async def nearby(
                 ),
             )
         )
-    statement = statement.order_by(distance.asc(), Issue.id.asc()).limit(limit + 1)
+    statement = (
+        statement.options(*LISTED)
+        .order_by(distance.asc(), Issue.id.asc())
+        .limit(limit + 1)
+    )
 
     rows = (await session.execute(statement)).all()
     has_more = len(rows) > limit
@@ -361,45 +374,71 @@ async def feed(
     score = _feed_score(latitude, longitude, pinned)
     distance = squared_distance_m(latitude, longitude)
 
-    rungs = [r for r in settings.feed_radius_ladder_m if r <= settings.max_radius_m]
+    visible = Issue.status.not_in(list(HIDDEN_STATUSES))
+
+    def within(radius: float):
+        min_lat, max_lat, min_lng, max_lng = bounding_box(latitude, longitude, radius)
+        return and_(
+            Issue.latitude.between(min_lat, max_lat),
+            Issue.longitude.between(min_lng, max_lng),
+            distance <= radius * radius,
+        )
+
+    statement = select(Issue, score.label("score")).where(visible)
     if cursor is not None:
         # Later pages stay on the ring the first page settled on, or the feed
         # would widen mid-scroll and repeat what it had already shown.
-        rungs = [cursor.radius_m]
-
-    rows: list = []
-    used = rungs[-1] if rungs else settings.default_radius_m
-    # 0 is the last rung and means no distance filter at all. Somebody far from
-    # anywhere anyone has reported still gets a screen with something on it,
-    # and `radius_m: null` is how the app knows to say where it came from.
-    for radius in [*rungs, 0.0]:
-        statement = select(Issue, score.label("score")).where(
-            Issue.status.not_in(list(HIDDEN_STATUSES)),
+        rungs = [cursor.radius_m] if cursor.radius_m else []
+        statement = statement.where(
+            or_(
+                score < cursor.score,
+                and_(score == cursor.score, Issue.id > cursor.issue_id),
+            )
         )
-        if radius:
-            min_lat, max_lat, min_lng, max_lng = bounding_box(
-                latitude, longitude, radius
+        if rungs:
+            statement = statement.where(within(rungs[0]))
+        chosen = literal(0)
+    else:
+        rungs = [r for r in settings.feed_radius_ladder_m if r <= settings.max_radius_m]
+        chosen = literal(len(rungs))
+        if rungs:
+            # The smallest ring that already holds a full page, picked in the
+            # same round trip as the page itself. Past the widest ring there is
+            # no distance filter at all, so somebody far from anywhere anyone
+            # has reported still gets a screen with something on it, and
+            # `radius_m: null` is how the app knows to say where it came from.
+            ring = case(
+                *[(distance <= r * r, i) for i, r in enumerate(rungs)],
+                else_=len(rungs),
+            )
+            nearby = select(ring.label("ring")).where(visible, within(rungs[-1])).subquery()
+            tallies = (
+                select(nearby.c.ring, func.count().label("n"))
+                .group_by(nearby.c.ring)
+                .subquery()
+            )
+            running = select(
+                tallies.c.ring,
+                func.sum(tallies.c.n).over(order_by=tallies.c.ring).label("total"),
+            ).subquery()
+            chosen = (
+                select(func.coalesce(func.min(running.c.ring), len(rungs)))
+                .where(running.c.total >= limit)
+                .scalar_subquery()
             )
             statement = statement.where(
-                Issue.latitude.between(min_lat, max_lat),
-                Issue.longitude.between(min_lng, max_lng),
-                distance <= radius * radius,
+                or_(chosen == len(rungs), and_(within(rungs[-1]), ring <= chosen))
             )
-        if cursor is not None:
-            statement = statement.where(
-                or_(
-                    score < cursor.score,
-                    and_(score == cursor.score, Issue.id > cursor.issue_id),
-                )
-            )
-        statement = statement.order_by(score.desc(), Issue.id.asc()).limit(limit + 1)
-        rows = (await session.execute(statement)).all()
-        used = radius
-        # limit + 1 is fetched to detect a next page, so enough to fill this
-        # one is len >= limit. Requiring more than that would widen past a
-        # ring that was already exactly full.
-        if len(rows) >= limit:
-            break
+
+    statement = (
+        statement.add_columns(chosen.label("ring"))
+        .options(*LISTED)
+        .order_by(score.desc(), Issue.id.asc())
+        .limit(limit + 1)
+    )
+    rows = (await session.execute(statement)).all()
+    index = rows[0][2] if rows else (0 if cursor is not None else len(rungs))
+    used = rungs[index] if index < len(rungs) else 0.0
 
     has_more = len(rows) > limit
     rows = rows[:limit]
@@ -410,7 +449,7 @@ async def feed(
 
     next_cursor = None
     if has_more and rows:
-        last_issue, last_score = rows[-1]
+        last_issue, last_score, _ = rows[-1]
         next_cursor = FeedCursor(
             score=float(last_score),
             issue_id=last_issue.id,
@@ -845,7 +884,7 @@ async def duplicates(
     )
     if category is not None:
         statement = statement.where(Issue.category == category)
-    statement = statement.order_by(distance.asc(), Issue.id.asc()).limit(10)
+    statement = statement.options(*LISTED).order_by(distance.asc(), Issue.id.asc()).limit(10)
 
     issues = list((await session.scalars(statement)).all())
     confirmed = await _confirmed_issue_ids(session, viewer, [i.id for i in issues])
@@ -937,7 +976,7 @@ async def user_issues(
                 and_(Issue.created_at == moment, Issue.id < cursor.row_id),
             )
         )
-    statement = statement.order_by(
+    statement = statement.options(*LISTED).order_by(
         Issue.created_at.desc(), Issue.id.desc()
     ).limit(limit + 1)
 
@@ -1397,7 +1436,7 @@ async def user_supports(
                 ),
             )
         )
-    statement = statement.order_by(
+    statement = statement.options(*LISTED).order_by(
         Support.created_at.desc(), Support.id.desc()
     ).limit(limit + 1)
 

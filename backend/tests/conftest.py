@@ -32,6 +32,9 @@ def environment(tmp_path_factory) -> None:
             "SUPPORTS_PER_USER_PER_HOUR": "1000",
             # A commit would otherwise start a push run that outlives the test.
             "PUSH_ENABLED": "false",
+            # Most tests read a page, change something and read it again.
+            # test_cache turns it back on where it is the subject.
+            "PUBLIC_CACHE_TTL_SECONDS": "0",
         }
     )
 
@@ -49,12 +52,13 @@ def no_model_titles():
 
 @pytest.fixture
 async def client(environment) -> AsyncIterator[AsyncClient]:
-    from app import db, storage
+    from app import cache, db, storage
     from app.config import get_settings
     from app.main import app
     from app.models import Base
 
     get_settings.cache_clear()
+    cache.reset_public_cache()
     storage.set_store(None)
     async with db.engine().begin() as connection:
         await connection.run_sync(Base.metadata.drop_all)
