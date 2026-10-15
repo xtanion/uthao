@@ -472,7 +472,7 @@ async def create_issue(
         status=Status.REPORTED,
         latitude=latitude,
         longitude=longitude,
-        locality=None,
+        locality=locality,
         confirmation_count=0,
         comment_count=0,
         photo_count=len(photos),
@@ -1019,6 +1019,30 @@ def title_is_derived(title: str, description: str) -> bool:
     app sends. A title somebody wrote on its own is theirs and is left alone."""
     stem = title.strip().removesuffix("…").rstrip()
     return bool(stem) and description.strip().startswith(stem)
+
+
+async def name_locality(issue_id: str) -> None:
+    """Names the report's coordinates ("Worli, Mumbai") after the response.
+
+    The server's lookup replaces whatever the phone sent. When it fails the
+    phone's name stays, and a report with neither is left for the localities
+    job.
+    """
+    from . import geocode
+    from .db import sessionmaker
+
+    try:
+        async with sessionmaker()() as session:
+            issue = await session.get(Issue, issue_id)
+            if issue is None:
+                return
+            name = await geocode.locality(issue.latitude, issue.longitude)
+            if not name or name == issue.locality:
+                return
+            issue.locality = name
+            await session.commit()
+    except Exception:
+        log.exception("could not name the place for issue %s", issue_id)
 
 
 async def refresh_title(issue_id: str) -> None:

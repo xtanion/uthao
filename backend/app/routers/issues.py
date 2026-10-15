@@ -31,7 +31,6 @@ from ..schemas import (
     SupportPage,
 )
 from ..storage import get_store
-from .. import geocode
 
 router = APIRouter(prefix="/issues", tags=["issues"])
 
@@ -208,8 +207,8 @@ async def create(
     longitude: Annotated[float, Form(ge=-180, le=180)],
     photos: Annotated[list[UploadFile], File()],
     description: Annotated[str, Form(max_length=2000)] = "",
-    # "Worli, Mumbai" as the phone named it. Only a fallback: the server names
-    # the coordinates itself below.
+    # "Worli, Mumbai" as the phone named it. Shown until the server's own
+    # lookup, which runs after the response, replaces it.
     locality: Annotated[str | None, Form(max_length=120)] = None,
 ) -> IssueOut:
     report_id = _normalized_report_id(client_report_id)
@@ -224,7 +223,6 @@ async def create(
         raise HTTPException(status_code=429, detail=str(exc)) from exc
 
     processed = await _processed_photos(photos)
-    place = await geocode.locality(latitude, longitude) or (locality or "").strip() or None
     try:
         issue, created = await service.create_issue(
             session,
@@ -237,14 +235,17 @@ async def create(
             severity=severity,
             latitude=latitude,
             longitude=longitude,
-            locality=place,
+            locality=(locality or "").strip() or None,
             photos=processed,
         )
     except service.ConflictError as exc:
         raise _unprocessable(str(exc)) from exc
 
-    # Background tasks run in order, so the summary is written against the
-    # headline rather than the clipped caption it replaces.
+    # Background tasks run in order: the place is named first because the
+    # headline mentions it, and the summary is written against the headline
+    # rather than the clipped caption it replaces.
+    if created:
+        background.add_task(service.name_locality, issue.id)
     if (
         created
         and get_settings().ai_titles_configured
