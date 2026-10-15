@@ -252,6 +252,16 @@ export default function IssueDetail() {
 
       {issue.ai_summary && <Summary text={issue.ai_summary} />}
 
+      {(issue.status === 'in_review' || issue.status === 'rejected') && (
+        <>
+          <View style={[styles.divider, { backgroundColor: tone.hairline }]} />
+          <StatusChip status={issue.status} />
+          <Text style={[t.body(14), { color: tone.chalk, marginTop: 10 }]}>
+            {issue.review_note ?? statusNote(issue.status)}
+          </Text>
+        </>
+      )}
+
       {onTrack(issue.status) && (
         <>
           <View style={[styles.divider, { backgroundColor: tone.hairline }]} />

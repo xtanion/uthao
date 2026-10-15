@@ -39,6 +39,8 @@ class ContactPointKind(StrEnum):
 
 
 class Status(StrEnum):
+    # Filed, waiting on the AI check. Only the reporter can see it.
+    IN_REVIEW = "in_review"
     REPORTED = "reported"
     COMMUNITY_VERIFIED = "community_verified"
     SUBMITTED_TO_AUTHORITY = "submitted_to_authority"
@@ -49,13 +51,20 @@ class Status(StrEnum):
     REOPENED = "reopened"
     DUPLICATE = "duplicate"
     REMOVED = "removed"
+    # The AI check found the photos do not show the reported problem.
+    REJECTED = "rejected"
 
+
+# Not yet public, or never will be. The reporter can still open their own.
+UNDER_REVIEW = frozenset({Status.IN_REVIEW, Status.REJECTED})
 
 # Statuses that hide an issue from public reads.
-HIDDEN_STATUSES = frozenset({Status.REMOVED})
+HIDDEN_STATUSES = frozenset({Status.REMOVED, *UNDER_REVIEW})
 
 # Statuses where there is nothing left to organise around.
-CLOSED_STATUSES = frozenset({Status.RESOLVED, Status.DUPLICATE, Status.REMOVED})
+CLOSED_STATUSES = frozenset(
+    {Status.RESOLVED, Status.DUPLICATE, Status.REMOVED, Status.REJECTED}
+)
 
 # Raised with an authority and not yet finished, so worth asking about.
 IN_FLIGHT_STATUSES = frozenset(

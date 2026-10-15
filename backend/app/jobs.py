@@ -6,6 +6,7 @@ Run these from the system's own scheduler rather than in-process:
     uv run python -m app.jobs check        # daily
     uv run python -m app.jobs prune        # daily
     uv run python -m app.jobs localities   # once, then daily (names old reports)
+    uv run python -m app.jobs review       # every few minutes (retries stuck AI reviews)
     uv run python -m app.jobs all
 
 They are written to be safe to run more than once and safe to interrupt: each
@@ -430,12 +431,22 @@ async def name_localities(limit: int | None = None) -> Report:
     return report
 
 
+async def review_stuck(limit: int | None = None) -> Report:
+    """Retries reports left in review by a failed AI call or a restart."""
+    from . import review
+
+    report = Report(considered=await review.retry_stuck(limit))
+    log.info("review: %s", report)
+    return report
+
+
 JOBS = {
     "escalate": escalate_confirmed,
     "check": check_submitted,
     "prune": prune_otp,
     "push": push.deliver_pending,
     "localities": name_localities,
+    "review": review_stuck,
 }
 
 

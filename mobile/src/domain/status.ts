@@ -26,6 +26,11 @@ export type StatusMeta = {
  * nothing they did not already know from the field name.
  */
 export const STATUS_META: Record<Status, StatusMeta> = {
+  in_review: {
+    label: 'In review',
+    tone: 'neutral',
+    note: 'Checking your photos. It goes live for people nearby once that is done, usually within a minute.',
+  },
   reported: {
     label: 'Reported',
     tone: 'neutral',
@@ -75,6 +80,11 @@ export const STATUS_META: Record<Status, StatusMeta> = {
     label: 'Removed',
     tone: 'muted',
     note: 'Taken down, so it no longer appears to anyone else.',
+  },
+  rejected: {
+    label: 'Not published',
+    tone: 'warn',
+    note: "The photos didn't pass the check, so only you can see this.",
   },
 };
 

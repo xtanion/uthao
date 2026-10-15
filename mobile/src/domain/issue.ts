@@ -12,9 +12,9 @@ export const SEVERITIES = ['low', 'medium', 'high'] as const;
 export type Severity = (typeof SEVERITIES)[number];
 
 export const STATUSES = [
-  'reported', 'community_verified', 'submitted_to_authority',
+  'in_review', 'reported', 'community_verified', 'submitted_to_authority',
   'authority_acknowledged', 'in_progress', 'resolution_claimed', 'resolved',
-  'reopened', 'duplicate', 'removed',
+  'reopened', 'duplicate', 'removed', 'rejected',
 ] as const;
 export type Status = (typeof STATUSES)[number];
 
@@ -65,6 +65,9 @@ export type Issue = {
   /** The whole gallery, on the detail read only. Null in the feed. */
   photos: Photo[] | null;
   ai_summary: string | null;
+  /** Why the AI check turned it down. Only on a rejected report, seen only
+   *  by its reporter. */
+  review_note?: string | null;
   reporter: Reporter;
   created_at: string;
 };
@@ -211,6 +214,7 @@ export type Stage = {
 /** How far along the trunk each status sits. Two of them are off it entirely:
  *  a duplicate or a removed report is not partway to being fixed. */
 const TRUNK: Record<Status, number> = {
+  in_review: -1,
   reported: 0,
   community_verified: 1,
   submitted_to_authority: 2,
@@ -221,6 +225,7 @@ const TRUNK: Record<Status, number> = {
   resolved: 3,
   duplicate: -1,
   removed: -1,
+  rejected: -1,
 };
 
 export const onTrack = (status: Status) => TRUNK[status] >= 0;

@@ -48,6 +48,8 @@ STATUS_LABELS = {
     Status.REOPENED: "Reopened",
     Status.DUPLICATE: "Duplicate",
     Status.REMOVED: "Removed",
+    Status.IN_REVIEW: "In review",
+    Status.REJECTED: "Not published",
 }
 
 CATEGORY_LABELS = {
@@ -161,6 +163,10 @@ def compose(activity: ActivityEvent) -> tuple[str, str]:
         return title, "The authority replied to your report"
     if activity.to_status == Status.COMMUNITY_VERIFIED:
         return title, "Enough neighbours confirmed this to verify it"
+    if activity.from_status == Status.IN_REVIEW and activity.to_status == Status.REPORTED:
+        return title, "Your report is live for people nearby"
+    if activity.to_status == Status.REJECTED:
+        return title, "Your report was not published. Tap to see why"
     status = activity.to_status or issue.status
     return title, f"Status moved to {STATUS_LABELS.get(status, status.value)}"
 
