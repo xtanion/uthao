@@ -11,6 +11,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { RemoteImage } from '../shell/RemoteImage';
 import type { Support } from '../../domain/issue';
 import { MAX_PHOTOS, shortAge } from '../../domain/issue';
 import { Avatar } from '../profile/Avatar';
@@ -115,7 +116,7 @@ function SupportRow({ support }: { support: Support }) {
             contentContainerStyle={{ paddingTop: 9 }}>
             {support.photos.map((photo) =>
               usable(photo.thumbnail_url) ? (
-                <Image key={photo.id} source={{ uri: photo.thumbnail_url }} style={styles.photo} />
+                <RemoteImage key={photo.id} source={{ uri: photo.thumbnail_url }} style={styles.photo} />
               ) : (
                 <View
                   key={photo.id}
