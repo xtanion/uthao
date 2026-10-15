@@ -3,7 +3,6 @@ import { Camera } from 'lucide-react-native';
 import React, { useState } from 'react';
 import {
   Dimensions,
-  Image,
   Modal,
   Pressable,
   ScrollView,
@@ -11,6 +10,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { RemoteImage } from '../shell/RemoteImage';
 import type { Photo } from '../../domain/issue';
 import { shortAge } from '../../domain/issue';
 import { Avatar } from '../profile/Avatar';
@@ -40,7 +40,7 @@ export function Gallery({ photos, onAdd }: { photos: Photo[]; onAdd?: () => void
     <View>
       <Pressable onPress={() => setOpen(0)}>
         {usable(lead) ? (
-          <Image source={{ uri: lead.url }} style={styles.lead} resizeMode="cover" />
+          <RemoteImage source={{ uri: lead.url }} style={styles.lead} resizeMode="cover" />
         ) : (
           <View style={[styles.lead, styles.placeholder, { backgroundColor: tone.surface }]}>
             <Camera size={28} color={tone.chalk} />
@@ -57,7 +57,7 @@ export function Gallery({ photos, onAdd }: { photos: Photo[]; onAdd?: () => void
           {rest.map((photo, index) => (
             <Pressable key={photo.id} onPress={() => setOpen(index + 1)} style={styles.tileWrap}>
               {usable(photo) ? (
-                <Image source={{ uri: photo.thumbnail_url }} style={styles.tile} />
+                <RemoteImage source={{ uri: photo.thumbnail_url }} style={styles.tile} />
               ) : (
                 <View style={[styles.tile, styles.placeholder, { backgroundColor: tone.surface }]}>
                   <Camera size={18} color={tone.chalk} />
@@ -139,7 +139,7 @@ function PhotoViewer({
           {photos.map((photo) => (
             <View key={photo.id} style={{ width, justifyContent: 'center' }}>
               {!photo.url.startsWith('demo://') && (
-                <Image source={{ uri: photo.url }} style={styles.viewerImage} resizeMode="contain" />
+                <RemoteImage source={{ uri: photo.url }} style={styles.viewerImage} resizeMode="contain" />
               )}
               <Pressable
                 onPress={() => {

@@ -1,5 +1,6 @@
 import React from 'react';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { RemoteImage } from '../shell/RemoteImage';
 import type { Issue } from '../../domain/issue';
 import { type as t, useTone } from '../../theme/tokens';
 import { CategoryGlyph, StatusGlyph } from '../issues/glyphs';
@@ -18,7 +19,7 @@ export function PostTile({ issue, onPress }: { issue: Issue; onPress: () => void
     <Pressable onPress={onPress} style={styles.cell}>
       <View style={[styles.tile, { backgroundColor: tone.surface }]}>
         {issue.cover_url ? (
-          <Image source={{ uri: issue.cover_url }} style={styles.image} resizeMode="cover" />
+          <RemoteImage source={{ uri: issue.cover_url }} style={styles.image} resizeMode="cover" />
         ) : (
           <View style={styles.fallback}>
             <CategoryGlyph category={issue.category} size={22} color={tone.chalk} />

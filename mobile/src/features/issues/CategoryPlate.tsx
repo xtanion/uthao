@@ -1,5 +1,6 @@
 import React from 'react';
-import { Image, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import { RemoteImage } from '../shell/RemoteImage';
 import Svg, { Defs, Line, Pattern, Rect } from 'react-native-svg';
 import type { Category, Severity } from '../../domain/issue';
 import { type Tones, metric, type as t, useTone } from '../../theme/tokens';
@@ -28,7 +29,7 @@ export function CategoryPlate({
 }) {
   const tone = useTone();
   if (uri) {
-    return <Image source={{ uri }} style={[styles.plate, { height }]} resizeMode="cover" />;
+    return <RemoteImage source={{ uri }} style={[styles.plate, { height }]} resizeMode="cover" />;
   }
   return (
     <View style={[styles.plate, { height, backgroundColor: tone.surface }]}>
