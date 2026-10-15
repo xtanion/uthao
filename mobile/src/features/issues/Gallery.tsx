@@ -70,6 +70,7 @@ export function Gallery({ photos, onAdd }: { photos: Photo[]; onAdd?: () => void
                 <Avatar
                   id={photo.contributor.id}
                   name={photo.contributor.display_name}
+                  uri={photo.contributor.avatar_url}
                   size={20}
                 />
               </Pressable>
@@ -101,7 +102,7 @@ function Credit({ photo }: { photo: Photo }) {
         onPress={() => router.push(`/users/${photo.contributor.id}`)}
         hitSlop={6}
         style={styles.creditPerson}>
-        <Avatar id={photo.contributor.id} name={photo.contributor.display_name} size={22} />
+        <Avatar id={photo.contributor.id} name={photo.contributor.display_name} uri={photo.contributor.avatar_url} size={22} />
         <Text style={[t.meta(12, '600', 0), { color: tone.ink, marginLeft: 7 }]}>
           {photo.contributor.display_name}
         </Text>
@@ -147,7 +148,7 @@ function PhotoViewer({
                 }}
                 hitSlop={8}
                 style={styles.viewerPerson}>
-                <Avatar id={photo.contributor.id} name={photo.contributor.display_name} size={22} />
+                <Avatar id={photo.contributor.id} name={photo.contributor.display_name} uri={photo.contributor.avatar_url} size={22} />
                 <Text style={[t.meta(12, '600', 0), { color: '#fff', marginLeft: 7 }]}>
                   {photo.contributor.display_name}
                 </Text>

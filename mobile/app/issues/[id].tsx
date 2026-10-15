@@ -1,5 +1,5 @@
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { Eye, Share2, Sparkles } from 'lucide-react-native';
+import { Eye, MapPin, Share2, Sparkles } from 'lucide-react-native';
 import React, { useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useServices } from '../../src/data/context';
@@ -199,8 +199,9 @@ export default function IssueDetail() {
       />
 
       <View style={styles.row}>
-        <Text style={[t.meta(13, '600', 0), { color: tone.ink }]}>
-          {categoryLabel[issue.category]}
+        <MapPin size={15} color={tone.ink} />
+        <Text numberOfLines={1} style={[t.meta(13, '600', 0), { color: tone.ink, marginLeft: 5, flexShrink: 1 }]}>
+          {issue.locality ?? categoryLabel[issue.category]}
         </Text>
         <View style={[styles.dot, { backgroundColor: critical ? tone.hazard : tone.chalk }]} />
         <Text style={[t.meta(13, '600', 0), { color: critical ? tone.hazard : tone.chalk }]}>
@@ -218,7 +219,7 @@ export default function IssueDetail() {
         onPress={() => router.push(`/users/${issue.reporter.id}`)}
         style={styles.byline}
         hitSlop={6}>
-        <Avatar id={issue.reporter.id} name={issue.reporter.display_name} size={26} />
+        <Avatar id={issue.reporter.id} name={issue.reporter.display_name} uri={issue.reporter.avatar_url} size={26} />
         <Text style={[t.meta(12, '600', 0), { color: tone.ink, marginLeft: 8 }]}>
           {issue.reporter.display_name}
         </Text>

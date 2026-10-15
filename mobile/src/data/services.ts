@@ -198,6 +198,19 @@ export class DeviceLocationService implements LocationService {
     }
   }
 
+  async locality(point: GeoPoint) {
+    try {
+      const [place] = await Location.reverseGeocodeAsync(point);
+      if (!place) return null;
+      const area = place.district ?? place.subregion ?? place.name;
+      const city = place.city ?? place.region;
+      const parts = [area, city].filter((part, i, all): part is string => !!part && all.indexOf(part) === i);
+      return parts.join(', ') || null;
+    } catch {
+      return null;
+    }
+  }
+
   private async fix() {
     let timer: ReturnType<typeof setTimeout> | undefined;
     const timeout = new Promise<null>((resolve) => {

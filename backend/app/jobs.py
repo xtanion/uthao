@@ -5,6 +5,7 @@ Run these from the system's own scheduler rather than in-process:
     uv run python -m app.jobs escalate     # hourly
     uv run python -m app.jobs check        # daily
     uv run python -m app.jobs prune        # daily
+    uv run python -m app.jobs localities   # once, then daily (names old reports)
     uv run python -m app.jobs all
 
 They are written to be safe to run more than once and safe to interrupt: each
@@ -404,11 +405,37 @@ async def prune_otp(limit: int | None = None) -> Report:
     return report
 
 
+async def name_localities(limit: int | None = None) -> Report:
+    """Names reports that were filed without a locality. Safe to rerun: it only
+    touches rows still missing one, and sleeps between lookups to stay inside
+    Nominatim's one-request-a-second policy."""
+    from . import geocode
+
+    report = Report()
+    async with sessionmaker()() as session:
+        query = select(Issue).where(Issue.locality.is_(None)).order_by(Issue.created_at.desc())
+        if limit:
+            query = query.limit(limit)
+        for issue in (await session.scalars(query)).all():
+            report.considered += 1
+            name = await geocode.locality(issue.latitude, issue.longitude)
+            if name:
+                issue.locality = name
+                await session.commit()
+                report.moved += 1
+            else:
+                report.failed += 1
+            await asyncio.sleep(1.1)
+    log.info("localities: %s", report)
+    return report
+
+
 JOBS = {
     "escalate": escalate_confirmed,
     "check": check_submitted,
     "prune": prune_otp,
     "push": push.deliver_pending,
+    "localities": name_localities,
 }
 
 

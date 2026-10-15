@@ -44,7 +44,7 @@ from .schemas import (
     SupportOut,
     SupportPage,
 )
-from .storage import ObjectStore
+from .storage import ObjectStore, get_store
 from .summarize import NullSummarizer, SummaryRequest, get_summarizer
 from .titles import NullTitler, TitleRequest, get_titler
 
@@ -160,6 +160,18 @@ def _cover_url(issue: Issue, store: ObjectStore) -> str | None:
     return store.signed_url(issue.photos[0].thumbnail_key, ttl)
 
 
+def _person(user: User, store: ObjectStore) -> ReporterOut:
+    """A credited person, with their avatar signed for this response."""
+    avatar_url = (
+        store.signed_url(user.avatar_key, get_settings().signed_url_ttl_seconds)
+        if user.avatar_key
+        else None
+    )
+    return ReporterOut(
+        id=user.id, display_name=user.display_name, avatar_url=avatar_url
+    )
+
+
 def _to_out(issue: Issue, confirmed: bool, store: ObjectStore) -> IssueOut:
     return IssueOut(
         id=issue.id,
@@ -181,9 +193,7 @@ def _to_out(issue: Issue, confirmed: bool, store: ObjectStore) -> IssueOut:
         contributions_open_at=contributions_open_at(issue),
         ai_summary=issue.ai_summary,
         cover_url=_cover_url(issue, store),
-        reporter=ReporterOut(
-            id=issue.reporter_id, display_name=issue.reporter.display_name
-        ),
+        reporter=_person(issue.reporter, store),
         created_at=issue.created_at,
     )
 
@@ -478,6 +488,7 @@ async def create_issue(
     latitude: float,
     longitude: float,
     photos: list[ProcessedImage],
+    locality: str | None = None,
 ) -> tuple[Issue, bool]:
     """Returns the issue and whether it was created by this call."""
     existing = await session.scalar(
@@ -500,7 +511,7 @@ async def create_issue(
         status=Status.REPORTED,
         latitude=latitude,
         longitude=longitude,
-        locality=None,
+        locality=locality,
         confirmation_count=0,
         comment_count=0,
         photo_count=len(photos),
@@ -632,10 +643,7 @@ def _photo_out(photo: IssuePhoto, store: ObjectStore) -> PhotoOut:
         id=photo.id,
         url=store.signed_url(photo.original_key, ttl),
         thumbnail_url=store.signed_url(photo.thumbnail_key, ttl),
-        contributor=ReporterOut(
-            id=photo.contributor_id,
-            display_name=photo.contributor.display_name,
-        ),
+        contributor=_person(photo.contributor, store),
         from_report=photo.support_id is None,
         created_at=photo.created_at,
     )
@@ -648,9 +656,7 @@ def _support_out(
         id=support.id,
         body=support.body,
         photos=[_photo_out(photo, store) for photo in support.photos],
-        author=ReporterOut(
-            id=support.user_id, display_name=support.user.display_name
-        ),
+        author=_person(support.user, store),
         author_is_reporter=support.user_id == issue.reporter_id,
         mine=viewer is not None and support.user_id == viewer.id,
         created_at=support.created_at,
@@ -1054,6 +1060,30 @@ def title_is_derived(title: str, description: str) -> bool:
     return bool(stem) and description.strip().startswith(stem)
 
 
+async def name_locality(issue_id: str) -> None:
+    """Names the report's coordinates ("Worli, Mumbai") after the response.
+
+    The server's lookup replaces whatever the phone sent. When it fails the
+    phone's name stays, and a report with neither is left for the localities
+    job.
+    """
+    from . import geocode
+    from .db import sessionmaker
+
+    try:
+        async with sessionmaker()() as session:
+            issue = await session.get(Issue, issue_id)
+            if issue is None:
+                return
+            name = await geocode.locality(issue.latitude, issue.longitude)
+            if not name or name == issue.locality:
+                return
+            issue.locality = name
+            await session.commit()
+    except Exception:
+        log.exception("could not name the place for issue %s", issue_id)
+
+
 async def refresh_title(issue_id: str) -> None:
     """Replace a clipped-caption title with a written headline.
 
@@ -1135,7 +1165,7 @@ GOING_SHOWN = 24
 
 
 def _fix_date_out(
-    row: FixDate, voted: set[str], viewer: User | None
+    row: FixDate, voted: set[str], viewer: User | None, store: ObjectStore
 ) -> FixDateOut:
     return FixDateOut(
         id=row.id,
@@ -1143,15 +1173,13 @@ def _fix_date_out(
         fix_time=row.fix_time,
         vote_count=row.vote_count,
         going=[
-            ReporterOut(id=v.user_id, display_name=v.voter.display_name)
+            _person(v.voter, store)
             for v in sorted(row.votes, key=lambda v: v.created_at, reverse=True)[
                 :GOING_SHOWN
             ]
         ],
         voted_by_me=row.id in voted,
-        proposed_by=ReporterOut(
-            id=row.created_by, display_name=row.creator.display_name
-        ),
+        proposed_by=_person(row.creator, store),
         mine=viewer is not None and row.created_by == viewer.id,
     )
 
@@ -1166,7 +1194,11 @@ async def _recount_votes(session: AsyncSession, row: FixDate) -> None:
 
 
 async def fix_dates(
-    session: AsyncSession, *, issue: Issue, viewer: User | None
+    session: AsyncSession,
+    *,
+    issue: Issue,
+    viewer: User | None,
+    store: ObjectStore | None = None,
 ) -> FixDatesOut:
     """The poll. Readable before it opens so people can see what is coming."""
     rows = list(
@@ -1192,7 +1224,7 @@ async def fix_dates(
         )
     settings = get_settings()
     return FixDatesOut(
-        items=[_fix_date_out(row, voted, viewer) for row in rows],
+        items=[_fix_date_out(row, voted, viewer, store or get_store()) for row in rows],
         open=contributions_are_open(issue),
         opens_at=contributions_open_at(issue),
         proposed_by_me=viewer is not None

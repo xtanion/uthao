@@ -300,4 +300,4 @@ async def test_issues_carry_their_reporter_everywhere(client, sender):
     supports = await client.get(f"/users/{theirs}/supports")
 
     for body in (detail.json(), nearby.json()["items"][0], supports.json()["items"][0]):
-        assert body["reporter"] == {"id": mine, "display_name": "Hooman 3210"}
+        assert body["reporter"] == {"id": mine, "display_name": "Hooman 3210", "avatar_url": None}

@@ -276,7 +276,7 @@ function DayRow({
           <View style={styles.stack}>
             {row.going.slice(0, FACES).map((person, i) => (
               <View key={person.id} style={{ marginLeft: i === 0 ? 0 : -7 }}>
-                <Avatar id={person.id} name={person.display_name} size={20} />
+                <Avatar id={person.id} name={person.display_name} uri={person.avatar_url} size={20} />
               </View>
             ))}
           </View>
@@ -359,7 +359,7 @@ function GoingSheet({ row, onClose }: { row: FixDate | null; onClose: () => void
                 router.push(`/users/${person.id}`);
               }}
               style={styles.person}>
-              <Avatar id={person.id} name={person.display_name} size={36} />
+              <Avatar id={person.id} name={person.display_name} uri={person.avatar_url} size={36} />
               <Text style={[t.display(15, '600'), { color: tone.ink, marginLeft: 12, flex: 1 }]}>
                 {person.display_name}
               </Text>

@@ -168,6 +168,7 @@ export class ApiIssuesRepository implements IssuesRepository {
     form.append('severity', draft.severity);
     form.append('latitude', String(draft.latitude));
     form.append('longitude', String(draft.longitude));
+    if (draft.locality) form.append('locality', draft.locality);
     appendPhotos(form, draft.photos);
     return request<Issue>('/issues', { method: 'POST', body: form });
   }

@@ -79,7 +79,7 @@ function SupportRow({ support }: { support: Support }) {
   return (
     <View style={[styles.row, { borderTopColor: tone.hairline }]}>
       <Pressable onPress={openAuthor} hitSlop={4}>
-        <Avatar id={support.author.id} name={support.author.display_name} size={34} />
+        <Avatar id={support.author.id} name={support.author.display_name} uri={support.author.avatar_url} size={34} />
       </Pressable>
 
       <View style={{ flex: 1, marginLeft: 11 }}>
