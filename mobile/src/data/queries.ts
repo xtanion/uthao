@@ -1,10 +1,19 @@
-import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  type InfiniteData,
+  keepPreviousData,
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
 import type { Category, GeoPoint, Severity, Status, SupportDraft } from '../domain/issue';
 import type { Period, StatsScope } from '../domain/stats';
 import { useServices } from './context';
-import { SEARCH_RADIUS_M } from './repository';
+import { SEARCH_RADIUS_M, type FeedPage, type Page } from './repository';
 import { capturedAt } from './services';
 import { clearSnapshots, firstPage, readSnapshot, useSaveSnapshot } from './snapshot';
+
+type Pages<P> = InfiniteData<P, string | null>;
 
 const key = (point: GeoPoint) => ['nearby', point.latitude, point.longitude] as const;
 
@@ -30,7 +39,7 @@ export function useFeed(point: GeoPoint | null) {
     queryFn: ({ pageParam }) => issues.feed(point as GeoPoint, pageParam),
     getNextPageParam: (last) => last.next_cursor,
     enabled: Boolean(point),
-    placeholderData: () => readSnapshot('feed'),
+    placeholderData: () => readSnapshot<Pages<FeedPage>>('feed'),
     // The feed does not refresh under somebody who is reading it. Reordering a
     // list while a person is halfway down it loses their place and can swap
     // the card out from under a tap, and none of the reasons to refetch are
@@ -329,7 +338,7 @@ export function useUserIssues(userId: string | null, status?: Status) {
     queryFn: ({ pageParam }) => users.issues(userId as string, pageParam, status),
     getNextPageParam: (last) => last.next_cursor,
     enabled: Boolean(userId),
-    placeholderData: () => (snap ? readSnapshot(snap) : undefined),
+    placeholderData: () => (snap ? readSnapshot<Pages<Page>>(snap) : undefined),
   });
   useSaveSnapshot(snap, query, firstPage);
   return query;
@@ -344,7 +353,7 @@ export function useUserSupports(userId: string | null) {
     queryFn: ({ pageParam }) => users.supports(userId as string, pageParam),
     getNextPageParam: (last) => last.next_cursor,
     enabled: Boolean(userId),
-    placeholderData: () => (snap ? readSnapshot(snap) : undefined),
+    placeholderData: () => (snap ? readSnapshot<Pages<Page>>(snap) : undefined),
   });
   useSaveSnapshot(snap, query, firstPage);
   return query;
