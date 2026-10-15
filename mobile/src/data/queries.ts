@@ -3,6 +3,7 @@ import type { Category, GeoPoint, Severity, Status, SupportDraft } from '../doma
 import type { Period, StatsScope } from '../domain/stats';
 import { useServices } from './context';
 import { SEARCH_RADIUS_M } from './repository';
+import { capturedAt } from './services';
 import { clearSnapshots, firstPage, readSnapshot, useSaveSnapshot } from './snapshot';
 
 const key = (point: GeoPoint) => ['nearby', point.latitude, point.longitude] as const;
@@ -92,6 +93,10 @@ export function useSupports(issueId: string) {
     initialPageParam: null as string | null,
     queryFn: ({ pageParam }) => issues.supports(issueId, pageParam),
     getNextPageParam: (last) => last.next_cursor,
+    // While your own support is being checked, keep an eye on it so the
+    // Verifying badge clears (or it disappears) without a manual refresh.
+    refetchInterval: (query) =>
+      query.state.data?.pages.some((p) => p.items.some((s) => s.mine && s.verifying)) ? 5000 : false,
   });
 }
 
@@ -106,10 +111,22 @@ export function useGallery(issueId: string) {
 /** Adding words or a photo changes the issue, the thread, and the gallery, so
  *  all three are refreshed rather than patched. */
 export function useSupport(issueId: string) {
-  const { issues } = useServices();
+  const { issues, location } = useServices();
   const client = useQueryClient();
   return useMutation({
-    mutationFn: (draft: SupportDraft) => issues.support(issueId, draft),
+    // Photos backing someone's report must come from the spot, just taken, so
+    // a fresh fix and the capture time go with them.
+    mutationFn: async (draft: SupportDraft) =>
+      issues.support(
+        issueId,
+        draft.photos.length
+          ? {
+              ...draft,
+              point: draft.point ?? (await location.current()),
+              captured_at: draft.captured_at ?? capturedAt(draft.photos),
+            }
+          : draft,
+      ),
     onSuccess: (updated) => {
       client.setQueryData(['issue', updated.id], updated);
       for (const key of [['supports', issueId], ['gallery', issueId], ['issue', issueId]]) {

@@ -159,6 +159,8 @@ def compose(activity: ActivityEvent) -> tuple[str, str]:
     if activity.type == ActivityType.SUPPORT_RECEIVED:
         who = activity.actor.display_name if activity.actor else "Someone"
         return title, f"{who} independently saw this"
+    if activity.type == ActivityType.SUPPORT_REJECTED:
+        return title, f"Your support wasn't added. {activity.note or ''}".strip()
     if activity.type == ActivityType.AUTHORITY_REPLIED:
         return title, "The authority replied to your report"
     if activity.to_status == Status.COMMUNITY_VERIFIED:

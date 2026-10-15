@@ -27,7 +27,7 @@ from sqlalchemy import select
 from .config import get_settings
 from .enums import ActivityType, Status
 from .llm import classify, moderate
-from .models import ActivityEvent, Issue, utcnow
+from .models import ActivityEvent, Issue, IssuePhoto, Support, utcnow
 from .storage import ObjectStore, get_store
 from .titles import TitleRequest, get_titler
 
@@ -212,4 +212,203 @@ async def retry_stuck(limit: int | None = None) -> int:
         ids = list((await session.scalars(query)).all())
     for issue_id in ids:
         await review_report(issue_id)
+    return len(ids)
+
+
+# ---------------------------------------------------------------------------
+# Supports
+#
+# A photo-backed support is what confirms a report, and confirming a report is
+# what sends a letter to an authority. So supports get the same gate, stricter:
+# the on-the-spot checks in service.add_support (within reach, freshly taken,
+# not a copy) run first, then this. Until it passes, a support shows to
+# everyone marked as verifying, but its photos do not count.
+# ---------------------------------------------------------------------------
+
+SUPPORT_SYSTEM = """You verify photos that a resident adds to back up someone \
+else's civic issue report on a public app in India. Backing a report is what \
+gets it sent to the municipal corporation, so be strict.
+
+You get the original report's photos first, then the supporter's new photos. \
+Approve only when you are confident the new photos show the SAME problem at \
+the SAME spot: the same pothole, the same garbage pile, the same broken \
+streetlight, seen from another angle, at another time of day, or closer up. \
+Different light, angle and framing are expected.
+
+Reject when the new photos show a different problem, a different place, \
+nothing wrong, something unrelated (a selfie, a screenshot, a document, an \
+indoor space), or when you cannot tell whether it is the same thing. When in \
+doubt, reject.
+
+The reason is shown to the supporter. Keep it to one short, plain, polite \
+sentence that says what did not match, and leave it empty when you approve."""
+
+# Enough of the original to recognise the spot, without paying for all of it.
+REPORT_IMAGES_SHOWN = 2
+
+
+async def _thumbs(photos: list[IssuePhoto], store: ObjectStore, limit: int) -> list[bytes] | None:
+    """Thumbnails, or None when storage could not supply them (retry later)."""
+    out = []
+    for photo in photos[:limit]:
+        data = await store.get(photo.thumbnail_key)
+        if not data:
+            return None
+        out.append(data)
+    return out
+
+
+async def check_support(
+    support: Support, issue: Issue, store: ObjectStore
+) -> Verdict | None:
+    """The verdict on a support's unchecked words and photos, or None to retry."""
+    settings = get_settings()
+    new_photos = [p for p in support.photos if p.verified_at is None]
+    new_images = await _thumbs(new_photos, store, MAX_IMAGES)
+    if new_images is None:
+        return None
+    text = support.body if support.verified_at is None else ""
+
+    if settings.ai_moderation and (text or new_images):
+        flagged = await moderate(text or "", new_images, model=settings.moderation_model)
+        if flagged is None:
+            return None
+        if flagged:
+            log.info("support %s flagged by moderation: %s", support.id, ", ".join(flagged))
+            return Verdict(approve=False, reason=_moderation_reason(flagged))
+
+    if not new_images:
+        return Verdict(approve=True, reason=None)  # words only, and they passed
+
+    originals = sorted(
+        (p for p in issue.photos if p.support_id is None), key=lambda p: p.position
+    )
+    report_images = await _thumbs(originals, store, REPORT_IMAGES_SHOWN)
+    if not report_images:
+        return None
+    prompt = (
+        f"Category: {issue.category.value}\n"
+        f"Report says: {issue.description or issue.title}\n"
+        f"Supporter wrote: {support.body or '(nothing)'}\n\n"
+        f"The first {len(report_images)} image(s) are from the original report. "
+        f"The last {len(new_images)} image(s) are the supporter's new photos."
+    )
+    result = await classify(
+        SUPPORT_SYSTEM,
+        prompt,
+        report_images + new_images,
+        schema=SCHEMA,
+        model=settings.ai_review_model or settings.ai_model,
+        purpose="support_review",
+    )
+    if result is None:
+        return None
+    reason = (result.get("reason") or "").strip()[:300] or None
+    return Verdict(approve=bool(result.get("approve")), reason=reason)
+
+
+async def review_support(support_id: str) -> None:
+    """Pass or take down whatever in this support is still unchecked.
+
+    Passed: its words and photos are marked checked, the report's tallies are
+    recounted (which may confirm it), and the reporter is told. Failed: the
+    unchecked photos are deleted, and the whole support with them if nothing
+    in it had passed before; the supporter is told why. Any error leaves it
+    pending for the retry job.
+    """
+    from . import service
+    from .db import sessionmaker
+
+    store = get_store()
+    try:
+        async with sessionmaker()() as session:
+            support = await session.get(Support, support_id)
+            if support is None or not service.support_pending(support):
+                return
+            issue = await session.get(Issue, support.issue_id)
+            if issue is None:
+                return
+            never_passed = support.verified_at is None and not any(
+                p.verified_at is not None for p in support.photos
+            )
+            # Only what was actually looked at gets passed or taken down; a
+            # photo added while the model was thinking waits for its own turn.
+            checked = {p.id for p in support.photos if p.verified_at is None}
+            body_checked = support.body
+
+            verdict = await check_support(support, issue, store)
+            if verdict is None:
+                return
+
+            await session.refresh(support)
+            now = utcnow()
+            doomed: list[str] = []
+            if verdict.approve:
+                if support.body == body_checked:
+                    support.verified_at = support.verified_at or now
+                for photo in support.photos:
+                    if photo.id in checked:
+                        photo.verified_at = now
+                if never_passed and support.user_id != issue.reporter_id:
+                    service.notify_support_received(session, issue, support.user_id)
+            else:
+                text_failed = support.verified_at is None and bool(support.body)
+                unchecked = [p for p in support.photos if p.id in checked]
+                doomed = [k for p in unchecked for k in (p.original_key, p.thumbnail_key)]
+                if never_passed or text_failed:
+                    # Nothing in it stood up: the support goes entirely, which
+                    # also lets them try again with a proper photo.
+                    doomed = [
+                        k for p in support.photos for k in (p.original_key, p.thumbnail_key)
+                    ]
+                    await session.delete(support)
+                else:
+                    for photo in unchecked:
+                        await session.delete(photo)
+                session.add(
+                    ActivityEvent(
+                        user_id=support.user_id,
+                        issue_id=issue.id,
+                        type=ActivityType.SUPPORT_REJECTED,
+                        note=verdict.reason or "Your photos didn't match this report.",
+                    )
+                )
+            await session.flush()
+            await service._recount(session, issue)
+            await session.commit()
+            if doomed:
+                await store.delete(doomed)
+    except Exception:
+        log.exception("could not review support %s; it stays pending", support_id)
+
+
+async def retry_stuck_supports(limit: int | None = None) -> int:
+    """Re-checks supports left pending past the retry window."""
+    from sqlalchemy import or_
+
+    from .db import sessionmaker
+
+    settings = get_settings()
+    if not settings.ai_review_configured:
+        return 0
+    cutoff = utcnow() - timedelta(minutes=settings.review_retry_after_minutes)
+    unchecked_photo = (
+        select(IssuePhoto.id)
+        .where(IssuePhoto.support_id == Support.id, IssuePhoto.verified_at.is_(None))
+        .exists()
+    )
+    async with sessionmaker()() as session:
+        query = (
+            select(Support.id)
+            .where(
+                or_(Support.verified_at.is_(None), unchecked_photo),
+                Support.updated_at < cutoff,
+            )
+            .order_by(Support.updated_at.asc())
+        )
+        if limit:
+            query = query.limit(limit)
+        ids = list((await session.scalars(query)).all())
+    for support_id in ids:
+        await review_support(support_id)
     return len(ids)

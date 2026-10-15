@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime
 from typing import Annotated
 
 from fastapi import (
@@ -335,6 +336,11 @@ async def write_support(
     background: BackgroundTasks,
     body: Annotated[str | None, Form(max_length=2000)] = None,
     photos: Annotated[list[UploadFile] | None, File()] = None,
+    # Where the phone was and when the photos were taken. Required with
+    # photos: a support photo is evidence only if it was taken at the spot.
+    latitude: Annotated[float | None, Form(ge=-90, le=90)] = None,
+    longitude: Annotated[float | None, Form(ge=-180, le=180)] = None,
+    captured_at: Annotated[datetime | None, Form()] = None,
 ) -> IssueOut:
     """Back a report, optionally with words and photos.
 
@@ -361,13 +367,21 @@ async def write_support(
             store=get_store(),
             body=text,
             photos=processed,
+            latitude=latitude,
+            longitude=longitude,
+            captured_at=captured_at,
         )
     except service.SelfConfirmation as exc:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)
         ) from exc
-    except service.ConflictError as exc:
+    except (service.ConflictError, service.SupportRefused) as exc:
         raise _unprocessable(str(exc)) from exc
+
+    if get_settings().ai_review_configured:
+        pending = await service.pending_support_id(session, issue.id, user.id)
+        if pending:
+            background.add_task(review.review_support, pending)
 
     # Only words change what a summary would say; a bare +1 does not.
     if text and service.summary_is_due(issue):

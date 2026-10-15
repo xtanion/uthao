@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { ArrowUp } from 'lucide-react-native';
+import { ArrowUp, CircleX } from 'lucide-react-native';
 import React, { useCallback, useMemo } from 'react';
 import {
   Animated,
@@ -128,6 +128,7 @@ export function NotificationsScreen() {
 function Row({ item, onPress }: { item: Notification; onPress: () => void }) {
   const tone = useTone();
   const confirmation = item.type === 'support_received';
+  const rejected = item.type === 'support_rejected';
   return (
     <Pressable
       onPress={onPress}
@@ -148,6 +149,8 @@ function Row({ item, onPress }: { item: Notification; onPress: () => void }) {
         ]}>
         {confirmation ? (
           <ArrowUp size={17} color={tone.accentDeep} />
+        ) : rejected ? (
+          <CircleX size={17} color={tone.hazard} />
         ) : (
           <StatusGlyph
             status={item.to_status ?? item.issue.status}
@@ -158,7 +161,8 @@ function Row({ item, onPress }: { item: Notification; onPress: () => void }) {
       </View>
 
       <View style={styles.body}>
-        <Text numberOfLines={2} style={[t.display(15, '600'), { color: tone.ink }]}>
+        {/* A rejection carries its reason, which needs room to be read. */}
+        <Text numberOfLines={rejected ? 4 : 2} style={[t.display(15, '600'), { color: tone.ink }]}>
           {notificationLine(item)}
         </Text>
         <Text

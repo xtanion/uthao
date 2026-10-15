@@ -432,10 +432,13 @@ async def name_localities(limit: int | None = None) -> Report:
 
 
 async def review_stuck(limit: int | None = None) -> Report:
-    """Retries reports left in review by a failed AI call or a restart."""
+    """Retries reports and supports left in review by a failed AI call or a
+    restart."""
     from . import review
 
-    report = Report(considered=await review.retry_stuck(limit))
+    report = Report(
+        considered=await review.retry_stuck(limit) + await review.retry_stuck_supports(limit)
+    )
     log.info("review: %s", report)
     return report
 

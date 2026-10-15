@@ -154,6 +154,16 @@ class Settings(BaseSettings):
     # reaches the paid photo check.
     ai_moderation: bool = True
     moderation_model: str = "omni-moderation-latest"
+    # A photo backing someone else's report is evidence, so it has to come from
+    # the spot, freshly taken. The phone sends where it was and when the photo
+    # was taken; supports outside these are refused on the spot.
+    support_location_required: bool = True
+    support_max_distance_m: float = 50.0
+    support_photo_max_age_minutes: int = 10
+    # A support photo within this many bits (of 64) of a photo already on the
+    # issue is a copy of it, not a second witness. Measured: a cropped,
+    # recompressed copy lands within ~13 bits; unrelated photos 22 or more.
+    duplicate_photo_max_bits: int = 12
     # A report stuck in review this long (a failed call, a restart) is picked
     # up again by `python -m app.jobs review`.
     review_retry_after_minutes: int = 5

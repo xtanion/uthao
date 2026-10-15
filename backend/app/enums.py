@@ -94,6 +94,9 @@ class ActivityType(StrEnum):
     SUPPORT_RECEIVED = "support_received"
     STATUS_CHANGED = "status_changed"
     AUTHORITY_REPLIED = "authority_replied"
+    # Sent to a supporter, not the reporter: their support or its photos did
+    # not pass the check and were taken down. The reason is in `note`.
+    SUPPORT_REJECTED = "support_rejected"
 
 
 class MessageDirection(StrEnum):

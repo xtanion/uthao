@@ -95,6 +95,11 @@ function SupportRow({ support }: { support: Support }) {
               <Text style={[t.meta(10, '700', 0), { color: tone.accentDeep }]}>Reporter</Text>
             </View>
           )}
+          {support.verifying && (
+            <View style={[styles.badge, { backgroundColor: tone.surface }]}>
+              <Text style={[t.meta(10, '700', 0), { color: tone.chalk }]}>Verifying</Text>
+            </View>
+          )}
           <View style={{ flex: 1 }} />
           <Text style={[t.meta(12, '500', 0), { color: tone.chalk }]}>
             {shortAge(support.created_at)}
