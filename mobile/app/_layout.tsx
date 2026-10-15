@@ -9,12 +9,13 @@ import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import type { Theme } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as SystemUI from 'expo-system-ui';
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import * as Network from 'expo-network';
 import { AppState, useColorScheme } from 'react-native';
 import type { AppStateStatus } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ServicesProvider } from '../src/data/context';
+import { hydrateSnapshots } from '../src/data/snapshot';
 import { dark, light, useTone } from '../src/theme/tokens';
 import type { Tones } from '../src/theme/tokens';
 
@@ -44,6 +45,12 @@ export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
     'GeistPixel-Square': require('../assets/fonts/GeistPixel-Square.ttf'),
   });
+  // Last-seen feed and profiles, read off disk before the first screen so it
+  // can open on them instead of a spinner.
+  const [snapshotsReady, setSnapshotsReady] = useState(false);
+  useEffect(() => {
+    hydrateSnapshots().finally(() => setSnapshotsReady(true));
+  }, []);
 
   // React Query listens for window focus, which a native app never fires.
   // Without this, a feed left open past the signed-URL expiry comes back to
@@ -78,7 +85,7 @@ export default function RootLayout() {
     void SystemUI.setBackgroundColorAsync(scheme === 'dark' ? dark.bg : light.bg);
   }, [scheme]);
 
-  if (!fontsLoaded && !fontError) return null;
+  if ((!fontsLoaded && !fontError) || !snapshotsReady) return null;
 
   return (
     <SafeAreaProvider>

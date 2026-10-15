@@ -105,7 +105,12 @@ function Shell() {
           <StatsScreen onOpenMap={openMap} />
         ) : (
           <>
-            {location.isPending && <Centered><ActivityIndicator color={tone.accentDeep} /></Centered>}
+            {location.isPending &&
+              (section === 0 && tab === 0 ? (
+                <NearbyFeed point={null} />
+              ) : (
+                <Centered><ActivityIndicator color={tone.accentDeep} /></Centered>
+              ))}
             {location.isError && <LocationFailed error={location.error} onRetry={location.refetch} />}
             {location.data &&
               (section === 1 ? (

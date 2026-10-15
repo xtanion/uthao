@@ -3,6 +3,7 @@ import type { Category, GeoPoint, Severity, Status, SupportDraft } from '../doma
 import type { Period, StatsScope } from '../domain/stats';
 import { useServices } from './context';
 import { SEARCH_RADIUS_M } from './repository';
+import { clearSnapshots, firstPage, readSnapshot, useSaveSnapshot } from './snapshot';
 
 const key = (point: GeoPoint) => ['nearby', point.latitude, point.longitude] as const;
 
@@ -17,14 +18,18 @@ export function useNearbyFeed(point: GeoPoint) {
   });
 }
 
-/** The home feed. Ranked server-side, and never empty when anything exists. */
-export function useFeed(point: GeoPoint) {
+/** The home feed. Ranked server-side, and never empty when anything exists.
+ *  Opens on the last feed seen (even before a location fix) and swaps to the
+ *  fresh one when it arrives. */
+export function useFeed(point: GeoPoint | null) {
   const { issues } = useServices();
-  return useInfiniteQuery({
-    queryKey: ['feed', point.latitude, point.longitude],
+  const query = useInfiniteQuery({
+    queryKey: ['feed', point?.latitude, point?.longitude],
     initialPageParam: null as string | null,
-    queryFn: ({ pageParam }) => issues.feed(point, pageParam),
+    queryFn: ({ pageParam }) => issues.feed(point as GeoPoint, pageParam),
     getNextPageParam: (last) => last.next_cursor,
+    enabled: Boolean(point),
+    placeholderData: () => readSnapshot('feed'),
     // The feed does not refresh under somebody who is reading it. Reordering a
     // list while a person is halfway down it loses their place and can swap
     // the card out from under a tap, and none of the reasons to refetch are
@@ -33,6 +38,8 @@ export function useFeed(point: GeoPoint) {
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
   });
+  useSaveSnapshot('feed', query, firstPage);
+  return query;
 }
 
 export function useMapIssues(point: GeoPoint) {
@@ -237,11 +244,15 @@ export function useMarkNotificationsRead() {
 
 export function useProfile(userId: string | null) {
   const { users } = useServices();
-  return useQuery({
+  const snap = userId ? `profile:${userId}` : null;
+  const query = useQuery({
     queryKey: ['profile', userId],
     queryFn: () => users.profile(userId as string),
     enabled: Boolean(userId),
+    placeholderData: () => (snap ? readSnapshot(snap) : undefined),
   });
+  useSaveSnapshot(snap, query);
+  return query;
 }
 
 export function useEscalation(issueId: string) {
@@ -285,30 +296,41 @@ export function useSignOut() {
   return useMutation({
     mutationFn: () => auth.signOut(),
     // Everything cached was read as that person; none of it survives them.
-    onSuccess: () => client.clear(),
+    onSuccess: () => {
+      client.clear();
+      void clearSnapshots();
+    },
   });
 }
 
 export function useUserIssues(userId: string | null, status?: Status) {
   const { users } = useServices();
-  return useInfiniteQuery({
+  const snap = userId ? `userIssues:${userId}:${status ?? 'all'}` : null;
+  const query = useInfiniteQuery({
     queryKey: ['userIssues', userId, status ?? null],
     initialPageParam: null as string | null,
     queryFn: ({ pageParam }) => users.issues(userId as string, pageParam, status),
     getNextPageParam: (last) => last.next_cursor,
     enabled: Boolean(userId),
+    placeholderData: () => (snap ? readSnapshot(snap) : undefined),
   });
+  useSaveSnapshot(snap, query, firstPage);
+  return query;
 }
 
 export function useUserSupports(userId: string | null) {
   const { users } = useServices();
-  return useInfiniteQuery({
+  const snap = userId ? `supports:${userId}` : null;
+  const query = useInfiniteQuery({
     queryKey: ['supports', userId],
     initialPageParam: null as string | null,
     queryFn: ({ pageParam }) => users.supports(userId as string, pageParam),
     getNextPageParam: (last) => last.next_cursor,
     enabled: Boolean(userId),
+    placeholderData: () => (snap ? readSnapshot(snap) : undefined),
   });
+  useSaveSnapshot(snap, query, firstPage);
+  return query;
 }
 
 /** Rounded so a GPS fix drifting a few metres does not refetch the page. */
