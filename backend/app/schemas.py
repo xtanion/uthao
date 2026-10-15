@@ -25,6 +25,8 @@ class ReporterOut(BaseModel):
 
     id: str
     display_name: str
+    # Signed link to their profile picture, or null to draw the initials.
+    avatar_url: str | None = None
 
 
 class IssueOut(BaseModel):
