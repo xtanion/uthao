@@ -19,7 +19,8 @@ import { MAX_PHOTOS, categoryLabel, contributionsOpen, fullMoment, severityLabel
 import { CategoryPlate } from '../../src/features/issues/CategoryPlate';
 import { FixDatePoll } from '../../src/features/issues/FixDatePoll';
 import { Gallery } from '../../src/features/issues/Gallery';
-import { shareIssue } from '../../src/features/issues/share';
+import { ShareSheet } from '../../src/features/issues/ShareSheet';
+import { posterFor } from '../../src/domain/poster';
 import { ConfirmationBar } from '../../src/features/issues/ConfirmationBar';
 import { StatusChip } from '../../src/features/issues/StatusChip';
 import { EscalationCard } from '../../src/features/issues/EscalationCard';
@@ -110,6 +111,7 @@ export default function IssueDetail() {
   const propose = useProposeFixDate(id!);
   const vote = useVoteFixDate(id!);
   const [attached, setAttached] = useState<string[]>([]);
+  const [sharing, setSharing] = useState(false);
 
   if (query.isPending) return <Centered><ActivityIndicator color={tone.accentDeep} /></Centered>;
   if (query.isError) return <Notice text={(query.error as Error).message} />;
@@ -119,6 +121,8 @@ export default function IssueDetail() {
   const mine = issue.reporter.id === auth.currentUserId();
   const supports = thread.data?.pages.flatMap((page) => page.items) ?? [];
   const images = gallery.data ?? issue.photos ?? [];
+  // Null for reports nobody else can see yet; those get no share button.
+  const poster = posterFor(issue, { escalation: escalation.data, fixDates: board.data });
 
   const requireSignIn = () => {
     if (auth.currentUserId()) return false;
@@ -190,13 +194,21 @@ export default function IssueDetail() {
       contentContainerStyle={{ padding: metric.gutter, paddingBottom: 48 }}>
       <Stack.Screen
         options={{
-          headerRight: () => (
-            <Pressable onPress={() => shareIssue(issue)} hitSlop={12}>
-              <Share2 size={21} color={tone.ink} />
-            </Pressable>
-          ),
+          headerRight: () =>
+            poster ? (
+              <Pressable
+                onPress={() => setSharing(true)}
+                hitSlop={12}
+                accessibilityRole="button"
+                accessibilityLabel="Share this report">
+                <Share2 size={21} color={tone.ink} />
+              </Pressable>
+            ) : null,
         }}
       />
+      {poster && (
+        <ShareSheet issue={issue} poster={poster} visible={sharing} onClose={() => setSharing(false)} />
+      )}
 
       <View style={styles.row}>
         <MapPin size={15} color={tone.ink} />
