@@ -64,9 +64,26 @@ def geocoder_on(monkeypatch):
         ({"village": "Mumbai", "city": "Mumbai"}, "Mumbai"),
         ({"city": "Pune"}, "Pune"),
         ({}, None),
+        # Real Nominatim answers at zoom 17 for three reports in Lower Parel,
+        # which at zoom 14 all read "G/S Ward, Mumbai City District".
+        (
+            {"road": "Pandurang Budhkar Marg", "neighbourhood": "Gopal Nagar", "suburb": "Nehru Nagar",
+             "city_district": "Mumbai Zone 2", "state_district": "Mumbai City District"},
+            "Pandurang Budhkar Marg, Nehru Nagar",
+        ),
+        (
+            {"road": "Shankar Rao Naram Path (Gowalia Chawl Lane)", "neighbourhood": "Gopal Nagar",
+             "suburb": "Lower Parel", "city_district": "Mumbai Zone 2"},
+            "Shankar Rao Naram Path, Lower Parel",
+        ),
+        (
+            {"residential": "Lodha Place", "suburb": "Lower Parel", "city_district": "Mumbai Zone 2"},
+            "Lodha Place, Lower Parel",
+        ),
+        ({"suburb": "G/S Ward", "city_district": "Mumbai Zone 2", "city": "Mumbai"}, "Mumbai"),
     ],
 )
-def test_an_address_is_named_area_then_city(address, expected):
+def test_an_address_is_named_street_then_area(address, expected):
     assert geocode._name(address) == expected
 
 
@@ -81,6 +98,7 @@ async def test_the_lookup_reads_nominatims_address(geocoder_on):
 
     assert name == "Worli, Mumbai"
     assert seen[0].url.params["lat"] == "19.0176"
+    assert seen[0].url.params["zoom"] == "17"
     assert seen[0].headers["user-agent"].startswith("uthao/")
 
 
