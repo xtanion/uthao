@@ -7,6 +7,7 @@ most one request a second, which a report rate comfortably stays under. The
 backfill job sleeps between calls to keep to it.
 """
 import logging
+import re
 
 import httpx
 
@@ -14,17 +15,40 @@ from .config import get_settings
 
 log = logging.getLogger(__name__)
 
-# Most specific first. Indian addresses in OSM put the neighbourhood people
-# actually say ("Worli", "Bandra West") in one of these, depending on the city.
-_AREA_KEYS = ("suburb", "neighbourhood", "quarter", "city_district", "village", "hamlet")
+# Most specific first. A report is somewhere on a street, so the name leads
+# with the street or building and follows with the neighbourhood people say
+# ("Lower Parel"). Wards and zones are administrative and cover kilometres, so
+# every report nearby would read the same; they are skipped.
+_SPOT_KEYS = ("road", "pedestrian", "residential", "square", "neighbourhood", "quarter")
+_AREA_KEYS = ("suburb", "neighbourhood", "quarter", "village", "hamlet", "town", "city_district")
 _CITY_KEYS = ("city", "town", "municipality", "county", "state_district", "state")
+_ADMINISTRATIVE = re.compile(r"\b(ward|zone|district)\b", re.IGNORECASE)
+
+
+def _clean(value: str | None) -> str | None:
+    """Drops a bracketed alias: "Shankar Rao Naram Path (Gowalia Chawl Lane)"."""
+    if not value:
+        return None
+    value = re.sub(r"\s*\([^)]*\)", "", value).strip()
+    return value or None
+
+
+def _first(address: dict, keys: tuple[str, ...], *, skip: tuple[str | None, ...] = ()) -> str | None:
+    for key in keys:
+        value = _clean(address.get(key))
+        if value and value not in skip and not _ADMINISTRATIVE.search(value):
+            return value
+    return None
 
 
 def _name(address: dict) -> str | None:
-    area = next((address[k] for k in _AREA_KEYS if address.get(k)), None)
-    city = next((address[k] for k in _CITY_KEYS if address.get(k)), None)
-    parts = [p for i, p in enumerate((area, city)) if p and p not in (area, city)[:i]]
-    name = ", ".join(parts)
+    area = _first(address, _AREA_KEYS)
+    spot = _first(address, _SPOT_KEYS, skip=(area,))
+    if spot and area:
+        parts = (spot, area)
+    else:
+        parts = (spot or area, _first(address, _CITY_KEYS, skip=(spot or area,)))
+    name = ", ".join(p for p in parts if p)
     return name[:120] or None
 
 
@@ -49,7 +73,7 @@ async def locality(
                     "lat": latitude,
                     "lon": longitude,
                     "format": "jsonv2",
-                    "zoom": 14,
+                    "zoom": 17,
                     "addressdetails": 1,
                     "accept-language": "en",
                 },
